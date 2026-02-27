@@ -8,4 +8,5 @@ numpy
 pandas
 openpyxl
 qrcode
+imutils
 python-dotenv

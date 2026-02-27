@@ -6,26 +6,25 @@ class Command(BaseCommand):
     help = 'Generate face encodings for students who have a photo but no encoding.'
 
     def handle(self, *args, **options):
-        import sys
-        import os
-        # Add the site-packages directory to sys.path to ensure face_recognition_models is found
-        site_packages_path = '/home/sujjalbtw/Projects/Smart-Attendance-System/venv/lib/python3.13/site-packages'
-        if site_packages_path not in sys.path:
-            sys.path.insert(0, site_packages_path)
+        import cv2
+        from attendance_app.face_utils import encode_face
 
-        import face_recognition
-        import numpy as np
-
-        students_to_process = Student.objects.filter(photo__isnull=False).filter(face_encoding__isnull=True)
+        students_to_process = Student.objects.filter(photo__isnull=False, face_encoding__isnull=True)
         self.stdout.write(self.style.SUCCESS(f'Found {len(students_to_process)} students to process.'))
 
         for student in students_to_process:
             self.stdout.write(f'Processing {student.roll_number}...')
             try:
-                image = face_recognition.load_image_file(student.photo.path)
-                encodings = face_recognition.face_encodings(image)
-                if encodings:
-                    student.face_encoding = json.dumps(encodings[0].tolist())
+                image = cv2.imread(student.photo.path)
+                if image is None:
+                    self.stdout.write(self.style.WARNING(f'  Could not read image file for {student.roll_number}'))
+                    continue
+
+                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                encoding, _, _ = encode_face(rgb_image)
+
+                if encoding is not None:
+                    student.face_encoding = json.dumps(encoding.tolist())
                     student.save()
                     self.stdout.write(self.style.SUCCESS(f'  Successfully generated encoding for {student.roll_number}'))
                 else:

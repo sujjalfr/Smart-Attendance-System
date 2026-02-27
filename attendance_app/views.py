@@ -13,11 +13,6 @@ import time
 import pandas as pd
 import dlib
 
-# Load dlib's shape predictor
-shape_predictor_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.. ', 'easy_facial_recognition', 'pretrained_model', 'shape_predictor_68_face_landmarks.dat')
-shape_predictor = dlib.shape_predictor(shape_predictor_path)
-
-
 class HomeView(View):
     def get(self, request):
         return render(request, 'attendance_app/home.html')
@@ -50,15 +45,16 @@ class QRScanView(View):
 
 
 
+from . import face_utils
+
 def verify_face(request):
-    import face_recognition
     if request.method == 'POST':
         student_id = request.POST.get('student_id')
         image_data_url = request.POST.get('image')
 
         try:
-            student = Student.objects.get(roll_number=student_id)
-            stored_encoding = json.loads(student.face_encoding)
+            student = Student.objects.get(student_id=student_id)
+            stored_encoding = np.array(json.loads(student.face_encoding))
         except (Student.DoesNotExist, json.JSONDecodeError):
             return JsonResponse({'match': False, 'error': 'Invalid student data.'})
 
@@ -66,55 +62,44 @@ def verify_face(request):
         ext = format.split('/')[-1] 
         image_data = ContentFile(base64.b64decode(imgstr), name=f'{student_id}_{int(time.time())}.{ext}')
 
-        # Convert to numpy array for face_recognition
+        # Convert to numpy array for face processing
         image_array = cv2.imdecode(np.frombuffer(image_data.read(), np.uint8), cv2.IMREAD_COLOR)
+        
+        # The face_utils functions expect RGB images
+        rgb_image = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
 
-        # Find face locations and encodings
-        face_locations = face_recognition.face_locations(image_array)
-        print("Face locations:", face_locations)
+        # Get face encoding from the live image
+        live_encoding, face_location, landmarks = face_utils.encode_face(rgb_image)
 
-        if not face_locations:
-            print("No face detected.")
+        if live_encoding is None:
             return JsonResponse({'match': False, 'error': 'No face detected in the image.'})
 
-        # Send face location and landmarks to frontend
-        top, right, bottom, left = face_locations[0]
-        face_location = {'top': top, 'right': right, 'bottom': bottom, 'left': left}
-        print("Face location found:", face_location)
-
-        # Get facial landmarks
-        shape = shape_predictor(image_array, dlib.rectangle(left, top, right, bottom))
-        landmarks = [(p.x, p.y) for p in shape.parts()]
-
-
-        live_encoding = face_recognition.face_encodings(image_array, face_locations)[0]
-
         # Compare faces
-        match = face_recognition.compare_faces([stored_encoding], live_encoding, tolerance=0.5)
-        distance = face_recognition.face_distance([stored_encoding], live_encoding)[0]
+        is_match, distance = face_utils.compare_faces(stored_encoding, live_encoding)
 
-        if match[0]:
-            # Mark attendance
-            Attendance.objects.create(
-                student=student,
-                status='PRESENT',
-                snapshot=image_data,
-                confidence=distance
-            )
-            response_data = {'match': True, 'confidence': distance, 'face_location': face_location, 'landmarks': landmarks}
-            print("Response:", response_data)
-            return JsonResponse(response_data)
-        else:
-            # Mark as failed match
-            Attendance.objects.create(
-                student=student,
-                status='FAILED_MATCH',
-                snapshot=image_data,
-                confidence=distance
-            )
-            response_data = {'match': False, 'confidence': distance, 'face_location': face_location, 'landmarks': landmarks}
-            print("Response:", response_data)
-            return JsonResponse(response_data)
+        # Mark attendance
+        status = 'PRESENT' if is_match else 'FAILED_MATCH'
+        Attendance.objects.create(
+            student=student,
+            status=status,
+            snapshot=image_data,
+            confidence=distance
+        )
+
+        # Prepare response
+        response_data = {
+            'match': is_match,
+            'confidence': distance,
+            'face_location': {
+                'top': face_location[0],
+                'right': face_location[1],
+                'bottom': face_location[2],
+                'left': face_location[3]
+            } if face_location else None,
+            'landmarks': landmarks
+        }
+        
+        return JsonResponse(response_data)
 
     return JsonResponse({'error': 'Invalid request method.'}, status=405)
 
@@ -133,7 +118,7 @@ def export_attendance(request):
         attendance_records = attendance_records.filter(timestamp__date__lte=date_to)
 
     df = pd.DataFrame(list(attendance_records.values(
-        'student__student_id', 'student__full_name', 'timestamp', 'status', 'confidence'
+        'student__student_id', 'student__name', 'timestamp', 'status', 'confidence'
     )))
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

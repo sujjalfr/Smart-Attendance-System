@@ -7,7 +7,7 @@ from django.utils import timezone
 
 class Student(models.Model):
     name = models.CharField(max_length=100, default="")
-    roll_number = models.CharField(max_length=20, unique=True, default="")
+    student_id = models.CharField(max_length=20, unique=True, default="")
     email = models.EmailField(blank=True, null=True)
     photo = models.ImageField(upload_to='students/', null=True, blank=True)
     face_encoding = models.TextField(null=True, blank=True)
@@ -15,7 +15,7 @@ class Student(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.name} ({self.roll_number})"
+        return f"{self.name} ({self.student_id})"
 
 class Attendance(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE)

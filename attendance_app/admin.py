@@ -4,8 +4,8 @@ from .models import Student, Attendance
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'roll_number', 'email', 'created_at', 'photo_tag', 'qr_code_tag']
-    search_fields = ['name', 'roll_number', 'email']
+    list_display = ['name', 'student_id', 'email', 'created_at', 'photo_tag', 'qr_code_tag']
+    search_fields = ['name', 'student_id', 'email']
     readonly_fields = ['photo_tag', 'qr_code_tag']
 
     def photo_tag(self, obj):
@@ -24,4 +24,4 @@ class StudentAdmin(admin.ModelAdmin):
 class AttendanceAdmin(admin.ModelAdmin):
     list_display = ['student', 'date', 'time', 'verification_method']
     list_filter = ['date', 'verification_method']
-    search_fields = ['student__name', 'student__roll_number']
+    search_fields = ['student__name', 'student__student_id']

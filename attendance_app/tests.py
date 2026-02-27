@@ -10,14 +10,14 @@ import cv2
 
 class StudentModelTest(TestCase):
     def test_student_creation(self):
-        student = Student.objects.create(student_id='STU123', full_name='Test Student')
-        self.assertEqual(student.student_id, 'STU123')
+        student = Student.objects.create(roll_number='STU123', full_name='Test Student')
+        self.assertEqual(student.roll_number, 'STU123')
 
 class GenerateQRCommandTest(TestCase):
     def test_generate_qr_command(self):
-        Student.objects.create(student_id='STU123', full_name='Test Student')
-        call_command('generate_qr', '--student=STU123')
-        student = Student.objects.get(student_id='STU123')
+        Student.objects.create(roll_number='STU123', full_name='Test Student')
+        call_command('generate_qr', roll_number='STU123', stdout=StringIO())
+        student = Student.objects.get(roll_number='STU123')
         self.assertTrue(student.qr_data)
 
 class ViewsTest(TestCase):
