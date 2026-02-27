@@ -1,33 +1,34 @@
-# Smart Attendance System
+# Smart Attendance System (Project-III-BCA)
 
-A Django-based attendance system using QR codes and facial recognition.
+Automated attendance system combining QR code identification and face recognition. Built with Django (REST backend) and optional React frontend. Designed to prevent proxy attendance and provide digital records.
 
-## Setup
+Quick links
+- Proposal: Proposal.md
+- Setup: SETUP.md
+- Backend quickstart: backend/readme.md
 
-source venv/bin/activate 
-or 
-source venv310/bin/activate
+Highlights
+- Student registration: photo upload → face encoding + QR generation
+- QR-based check-in with live face verification
+- Attendance stored with timestamp; admin export to CSV/Excel
+- Supports server-side (dlib) or client-side (face-api.js) recognition
 
-echo $VIRTUAL_ENV
-1.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+<!-- sudo systemctl stop mariadb
+      sudo systemctl disable mariadb -->
+first enable mariadb ```sudo systemctl start mariadb```
 
-2.  **Configure environment:**
-    - Copy `.env.example` to `.env`
-    - Fill in the database credentials and a secret key in the `.env` file.
+Getting started (dev)
+1. Follow SETUP.md to install system packages and create venv.
+2. Install backend dependencies:
+   pip install -r backend/requirements.txt
+3. Configure DB and environment variables.
+4. Run migrations and start the server:
+   cd backend
+   python manage.py migrate
+   python manage.py createsuperuser
+   python manage.py runserver
 
-3.  **Run migrations:**
-    ```bash
-    python manage.py migrate
-    ```
-
-4.  **Run the development server:**
-    ```bash
-    python manage.py runserver
-    ```
+Need more?
+- To add a React demo (QR scanner + FaceScan), a Dockerfile, or an OpenAPI spec, request the artifact and it will be added.
 
 
-the terminal command to generate qr code from roll number is :
-source venv310/bin/activate && python manage.py generate_qr --roll=STU001 (Generate a QR code for the student with roll number STU001.)

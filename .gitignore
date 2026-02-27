@@ -1,54 +1,111 @@
 venv/
+myvenv/
 venv310/
-__pycache__/
-media/
-.env
-GEMINI.md
+/easy_facial_recognition/
+CODEBASE.md
+ForMe.md
+Ideas.md
+SETUP.md
+DATABASE_UPDATE_GUIDE.md
+CODE_CHANGES_SUMMARY.md
+DATABASE_UPDATE_GUIDE.md
+DOCUMENTATION_INDEX.md
+IMPLEMENTATION_COMPLETE.md
+TECHNICAL_SUMMARY.md
+CHANGELOG.md
+QUICK_REFERENCE.md
+README_DATABASE_FIX.md
 
-# === Python ===
+
+# ========================
+# Python/Django
+# ========================
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
 
-# === Virtual Environment ===
+# Distribution / packaging
+.Python
+env/
 venv/
 ENV/
-env/
-.venv/
-.venv310/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+*.egg
 
-# === Django ===
+# Django stuff:
 *.log
 *.pot
 *.pyc
+*.pyo
+*.sqlite3
 db.sqlite3
-db.sqlite3-journal
+*.env
+*.DS_Store
 media/
 staticfiles/
-static/
-tmp/
-*.pid
+node_modules/
 
-# === Face Recognition Project Specific ===
-# store face encodings, snapshots, and QR codes locally only
-face_data/
-snapshots/
-qr_codes/
+# Django migrations (optional, you may want to keep them)
+*/migrations/*.py
+*/migrations/*.pyc
+!*/migrations/__init__.py
 
-# === IDE / Editors ===
+# ========================
+# Node / React
+# ========================
+
+# dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# production
+build/
+dist/
+.cache/
+.eslintcache
+
+# dotenv
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ========================
+# VSCode / IDEs
+# ========================
 .vscode/
 .idea/
-*.swp
-*.swo
+*.sublime-workspace
+*.sublime-project
 
-# === OS / System Files ===
+# ========================
+# OS Files
+# ========================
 .DS_Store
 Thumbs.db
-ehthumbs.db
-desktop.ini
 
-# === Testing / Coverage ===
+# ========================
+# Optional - JetBrains / PyCharm
+# ========================
+.idea/
+*.iml
+
+# ========================
+# Coverage / testing
+# ========================
 htmlcov/
 .coverage
 .coverage.*
@@ -57,35 +114,6 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
-*.log
-junit.xml
+.hypothesis/
+.pytest_cache/
 
-# === Build / Packaging ===
-*.egg-info/
-.eggs/
-dist/
-build/
-develop-eggs/
-.installed.cfg
-*.manifest
-*.spec
-
-# === Env / Secrets ===
-.env
-*.env
-*.key
-*.pem
-*.crt
-*.cfg
-*.ini
-
-# === Docker ===
-*.pid
-*.seed
-*.bak
-*.backup
-docker-compose.override.yml
-
-# === Jupyter / Notebooks (if used) ===
-.ipynb_checkpoints/
-*.ipynb
