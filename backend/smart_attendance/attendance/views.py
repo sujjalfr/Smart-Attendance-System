@@ -187,34 +187,85 @@ class MarkAttendance(APIView):
         if len(candidates) > 1:
             second_dist = candidates[1][1]
             if (second_dist - top_dist) < MIN_TOP_SEPARATION:
-                print(f"Top two candidates too close (d1={top_dist}, d2={second_dist}); ambiguous match")
+                # Ambiguous top-two. Attempt a safe tie-breaker instead of immediate rejection:
+                # 1) Prefer any of the close candidates who are NOT already marked today.
+                # 2) If all close candidates are already marked (or none unmarked), pick a
+                #    deterministic candidate (first in sorted list) but return a warning
+                #    in logs/response so frontend can ask user to retry if desired.
+                print(f"Top two candidates too close (d1={top_dist}, d2={second_dist}); attempting tie-breaker")
                 try:
-                    if os.path.exists(path):
-                        os.remove(path)
+                    today = timezone.now().date()
+                    # consider all candidates that are very close to the top distance
+                    close_eps = max(MIN_TOP_SEPARATION, 0.02)
+                    close_candidates = [c for c in candidates if abs(c[1] - top_dist) <= close_eps]
+                    chosen_student = None
+                    chosen_distance = None
+                    for (cand_student, cand_dist) in close_candidates:
+                        existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                        if not existing_att:
+                            chosen_student = cand_student
+                            chosen_distance = cand_dist
+                            break
+                    ambiguous_fallback = False
+                    if not chosen_student:
+                        # no unmarked close candidate found; fall back to deterministic pick
+                        chosen_student, chosen_distance = candidates[0]
+                        ambiguous_fallback = True
                 except Exception:
-                    pass
-                return Response({"error": "Ambiguous face match"}, status=400)
+                    # If anything goes wrong in tie-breaker, fall back to original ambiguous error
+                    try:
+                        if os.path.exists(path):
+                            os.remove(path)
+                    except Exception:
+                        pass
+                    print("Tie-breaker failed; returning ambiguous error")
+                    return Response({"error": "Ambiguous face match"}, status=400)
+                # If we selected a fallback deterministic candidate, log it and continue
+                if chosen_student:
+                    student = chosen_student
+                    chosen_distance = chosen_distance
+                    if ambiguous_fallback:
+                        print(f"Ambiguous match resolved by deterministic fallback: selected {student.roll_no} (distance={chosen_distance})")
+                else:
+                    try:
+                        if os.path.exists(path):
+                            os.remove(path)
+                    except Exception:
+                        pass
+                    return Response({"error": "Ambiguous face match"}, status=400)
 
-        # Iterate ranked candidates and pick the first one within threshold which isn't already marked today
+        # Iterate ranked candidates and pick the first one within threshold which isn't already marked today.
+        # If a preselection was made by the tie-breaker above (assigned to `student`), respect it.
         chosen_student = None
         chosen_distance = None
         found_candidate_within_threshold = False
-        for (cand_student, cand_dist) in candidates:
-            if cand_dist is None:
-                continue
-            if cand_dist > 0 and cand_dist > STRICT_MATCH_THRESHOLD:
-                # distance above strict threshold; skip
-                continue
+
+        # If ambiguous tie-breaker already selected a `student`, use that person first.
+        if 'student' in locals() and student is not None:
+            chosen_student = student
+            # chosen_distance may have been set by the tie-breaker; keep it if available
+            try:
+                chosen_distance = chosen_distance
+            except Exception:
+                chosen_distance = None
             found_candidate_within_threshold = True
-            today = timezone.now().date()
-            existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
-            if existing_att:
-                # already marked, try next-best candidate
-                continue
-            # select this candidate for marking
-            chosen_student = cand_student
-            chosen_distance = cand_dist
-            break
+        else:
+            for (cand_student, cand_dist) in candidates:
+                if cand_dist is None:
+                    continue
+                if cand_dist > 0 and cand_dist > STRICT_MATCH_THRESHOLD:
+                    # distance above strict threshold; skip
+                    continue
+                found_candidate_within_threshold = True
+                today = timezone.now().date()
+                existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                if existing_att:
+                    # already marked, try next-best candidate
+                    continue
+                # select this candidate for marking
+                chosen_student = cand_student
+                chosen_distance = cand_dist
+                break
 
         if not chosen_student:
             if found_candidate_within_threshold:
