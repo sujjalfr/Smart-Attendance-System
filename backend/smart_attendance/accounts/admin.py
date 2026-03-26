@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Student, Department, Batch, ClassGroup
+from .models import Student, Department, Batch, ClassGroup, Teacher
 from django.contrib import messages
 import numpy as np
 
@@ -54,3 +54,4 @@ admin.site.register(Student, StudentAdmin)
 admin.site.register(Department)
 admin.site.register(Batch)
 admin.site.register(ClassGroup)
+admin.site.register(Teacher)

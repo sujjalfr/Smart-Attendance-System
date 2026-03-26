@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import Batch, ClassGroup, Department, Student
+from .models import Teacher
 
 
 class StudentSerializer(serializers.ModelSerializer):
@@ -28,6 +29,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "id",
             "roll_no",
             "name",
+            "email",
             "face_encoding",
             "qr_code",
             "qr_code_url",
@@ -112,3 +114,34 @@ class StudentSerializer(serializers.ModelSerializer):
 
         # Use default update for other fields
         return super().update(instance, validated_data)
+
+
+class TeacherSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(write_only=True, required=False)
+    image_url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Teacher
+        fields = [
+            "id",
+            "employee_id",
+            "name",
+            "email",
+            "face_encoding",
+            "image",
+            "image_url",
+            "department",
+            "created_at",
+        ]
+        read_only_fields = ["face_encoding", "created_at", "image_url"]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request") if hasattr(self, "context") else None
+        if obj.image and hasattr(obj.image, "url"):
+            try:
+                if request:
+                    return request.build_absolute_uri(obj.image.url)
+                return obj.image.url
+            except Exception:
+                return None
+        return None

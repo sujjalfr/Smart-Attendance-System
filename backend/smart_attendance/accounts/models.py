@@ -59,6 +59,7 @@ class ClassGroup(models.Model):
 class Student(models.Model):
     roll_no = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=100)
+    email = models.EmailField(max_length=254, null=True, blank=True, help_text="Student email for notifications")
     department = models.ForeignKey(
         Department, null=True, blank=True, on_delete=models.SET_NULL
     )
@@ -135,3 +136,40 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.roll_no} - {self.name}"
+
+
+def teacher_image_upload_path(instance, filename):
+    ext = filename.split(".")[-1]
+    date_str = datetime.now().strftime("%Y%m%d")
+    safe_id = "".join([c for c in instance.employee_id if c.isalnum() or c in ("_", "-")])
+    safe_name = (
+        "".join([c for c in instance.name if c.isalnum() or c in (" ", "_")])
+        .rstrip()
+        .replace(" ", "_")
+    )
+    filename = f"{safe_id}_{safe_name}_{date_str}.{ext}"
+    return os.path.join("teachers", filename)
+
+
+class Teacher(models.Model):
+    """Simple teacher model for managing teacher records and face encodings."""
+    employee_id = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=100)
+    email = models.EmailField(max_length=254, null=True, blank=True, help_text="Teacher email for notifications")
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
+    face_encoding = models.BinaryField(default=default_encoding, null=True, blank=True)
+    image = models.ImageField(upload_to=teacher_image_upload_path, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def has_valid_encoding(self):
+        if not self.face_encoding:
+            return False
+        try:
+            arr = np.frombuffer(self.face_encoding, dtype=np.float64)
+            return arr.shape == (128,) and not np.all(arr == 0)
+        except:
+            return False
+
+    def __str__(self):
+        return f"{self.employee_id} - {self.name}"
