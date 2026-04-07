@@ -10,8 +10,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from attendance.models import AdminToken
 
-from .models import Batch, ClassGroup, Department, Student
-from .serializers import StudentSerializer
+from .models import Batch, ClassGroup, Department, Student, Teacher
+from .serializers import StudentSerializer, TeacherSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -353,3 +353,19 @@ class StudentViewSet(viewsets.ModelViewSet):
                 {"detail": f"Failed to update student: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class TeacherViewSet(viewsets.ModelViewSet):
+    queryset = Teacher.objects.select_related("department").all()
+    serializer_class = TeacherSerializer
+
+    def partial_update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.exception("Error updating teacher: %s", e)
+            return Response({"detail": f"Failed to update teacher: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,9 +1,52 @@
 import face_recognition
 import numpy as np
+import time
 try:
     import cv2
 except Exception:
     cv2 = None
+
+# Simple module-level cache for known encodings
+_ENCODINGS_CACHE = None
+_ENCODINGS_CACHE_TS = 0
+_ENCODINGS_CACHE_TTL = 30.0  # seconds
+
+
+def _load_encodings_from_db(exclude_student_ids=None):
+    """Return list of (person_obj, encoding_np) for students (and teachers) excluding IDs."""
+    from accounts.models import Student
+
+    persons = []
+    qs = Student.objects.all()
+    if exclude_student_ids:
+        qs = qs.exclude(id__in=exclude_student_ids)
+    for student in qs:
+        if not student.face_encoding:
+            continue
+        try:
+            known_enc = np.frombuffer(student.face_encoding, dtype=np.float64)
+        except Exception:
+            continue
+        if known_enc.shape[0] != 128:
+            continue
+        persons.append((student, known_enc))
+
+    try:
+        from accounts.models import Teacher
+        for teacher in Teacher.objects.all():
+            if not teacher.face_encoding:
+                continue
+            try:
+                known_enc = np.frombuffer(teacher.face_encoding, dtype=np.float64)
+            except Exception:
+                continue
+            if known_enc.shape[0] != 128:
+                continue
+            persons.append((teacher, known_enc))
+    except Exception:
+        pass
+
+    return persons
 
 def get_face_encoding(image_path):
     # Extracts a 128-dim float64 encoding from the image for storage
@@ -20,19 +63,33 @@ def get_face_encoding(image_path):
     return encoding.tobytes()
 
 
-def match_face(unknown_image_path, threshold=0.6):
+def match_face(unknown_image_path, threshold=0.6, exclude_student_ids=None):
     """
-    Match an unknown image against all students' stored face encodings.
-    Returns:
-        - "no_face" if no face detected in the unknown image
-        - [] (empty list) if there are no stored encodings to compare
-        - A list of tuples [(student, distance), ...] sorted by distance ascending when faces are found
+    Match an unknown image against stored face encodings.
+    Improvements:
+      - Accepts `exclude_student_ids` to skip students already marked today.
+      - Uses a simple TTL cache for encodings when exclusions aren't provided.
+      - Computes distances in batch (vectorized) for much better performance.
 
-    The caller should inspect distances and decide which candidate to use.
+    Returns same types as before: "no_face", [], or list[(person, distance), ...]
     """
     from accounts.models import Student
 
     unknown_image = face_recognition.load_image_file(unknown_image_path)
+
+    # Quick resize for performance: reduce very large images to a reasonable max dimension
+    if cv2 is not None:
+        try:
+            h, w = unknown_image.shape[:2]
+            max_dim = max(h, w)
+            max_allowed = 800
+            if max_dim > max_allowed:
+                scale = max_allowed / float(max_dim)
+                new_w, new_h = int(w * scale), int(h * scale)
+                unknown_image = cv2.resize(unknown_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                print(f"Resized attendance image to {(new_w, new_h)} for speed (scale={scale:.2f})")
+        except Exception as e:
+            print("Resize fallback failed:", e)
 
     # Strategy attempts in order. Each step may populate `unknown_encs`.
     unknown_encs = []
@@ -127,34 +184,51 @@ def match_face(unknown_image_path, threshold=0.6):
     unknown_enc = np.asarray(unknown_encs[0], dtype=np.float64)
     print(f"Unknown encoding (shape={unknown_enc.shape}, dtype={unknown_enc.dtype})")
 
-    candidates = []
+    # Load known encodings (with simple TTL cache). Cache used only when exclude_student_ids is None
+    persons = None
+    global _ENCODINGS_CACHE, _ENCODINGS_CACHE_TS
+    now_ts = time.time()
+    if exclude_student_ids:
+        persons = _load_encodings_from_db(exclude_student_ids=exclude_student_ids)
+    else:
+        if _ENCODINGS_CACHE and (now_ts - _ENCODINGS_CACHE_TS) < _ENCODINGS_CACHE_TTL:
+            persons = _ENCODINGS_CACHE
+        else:
+            persons = _load_encodings_from_db(exclude_student_ids=None)
+            _ENCODINGS_CACHE = persons
+            _ENCODINGS_CACHE_TS = now_ts
 
-    # Iterate all students and compute distance to each stored encoding
-    for student in Student.objects.all():
-        if not student.face_encoding:
-            continue
-        try:
-            known_enc = np.frombuffer(student.face_encoding, dtype=np.float64)
-        except Exception:
-            print(f"Failed to read encoding for {getattr(student, 'roll_no', 'unknown')}")
-            continue
-        if known_enc.shape[0] != 128:
-            print(f"Skipping student {getattr(student, 'roll_no', 'unknown')}: invalid encoding shape {known_enc.shape}")
-            continue
-
-        # compute distance (lower is more similar)
-        d = face_recognition.face_distance([known_enc], unknown_enc)[0]
-        print(f"Distance for {getattr(student, 'roll_no', 'unknown')}: {d}")
-        candidates.append((student, float(d)))
-
-    if not candidates:
+    if not persons:
         print("No stored encodings available to compare.")
         return []
 
-    # sort ascending by distance
-    candidates.sort(key=lambda t: t[1])
-    best_student, best_dist = candidates[0]
-    print(f"Best match: {getattr(best_student, 'roll_no', 'unknown')} with distance {best_dist}")
+    # Build arrays for vectorized distance computation
+    known_encs = [p[1] for p in persons]
+    people = [p[0] for p in persons]
 
-    # return the full ranked list; caller will decide which candidate to accept
+    # Compute distances in batch (much faster than per-item loop)
+    try:
+        dists = face_recognition.face_distance(known_encs, unknown_enc)
+    except Exception as e:
+        print("Batch face_distance failed, falling back to per-item:", e)
+        candidates = []
+        for person, known_enc in zip(people, known_encs):
+            try:
+                d = face_recognition.face_distance([known_enc], unknown_enc)[0]
+            except Exception:
+                continue
+            candidates.append((person, float(d)))
+    else:
+        candidates = [(person, float(d)) for person, d in zip(people, dists)]
+
+    # sort ascending by distance
+    if not candidates:
+        print("No matching candidates found.")
+        return []
+
+    candidates.sort(key=lambda t: t[1])
+    best_person, best_dist = candidates[0]
+    display_id = getattr(best_person, 'roll_no', getattr(best_person, 'employee_id', 'unknown'))
+    print(f"Best match: {display_id} with distance {best_dist}")
+
     return candidates

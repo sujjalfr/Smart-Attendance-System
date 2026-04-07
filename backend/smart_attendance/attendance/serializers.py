@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Attendance
+from .models import TeacherAttendance
 from datetime import time as datetime_time
 from django.utils import timezone
 
@@ -41,5 +42,36 @@ class AttendanceSerializer(serializers.ModelSerializer):
         else:
             instance.status = 'absent'
         
+        instance.save()
+        return instance
+
+
+class TeacherAttendanceSerializer(serializers.ModelSerializer):
+    time = serializers.TimeField(format='%H:%M:%S', allow_null=True, required=False)
+
+    class Meta:
+        model = TeacherAttendance
+        fields = ['id', 'teacher', 'date', 'time', 'status']
+        read_only_fields = ['teacher', 'date']
+
+    def validate_time(self, value):
+        if value is None:
+            return value
+        return value
+
+    def update(self, instance, validated_data):
+        if 'time' in validated_data:
+            instance.time = validated_data['time']
+        # Simple status logic similar to students
+        if instance.time:
+            from datetime import time as datetime_time
+            CUTOFF_TIME = datetime_time(9, 0)
+            LATE_TIME = datetime_time(9, 30)
+            if instance.time <= CUTOFF_TIME:
+                instance.status = 'on_time'
+            else:
+                instance.status = 'late'
+        else:
+            instance.status = 'absent'
         instance.save()
         return instance

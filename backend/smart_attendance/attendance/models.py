@@ -45,3 +45,29 @@ class AdminToken(models.Model):
 
     def __str__(self):
         return f"AdminToken(key={self.key})"
+
+
+class TeacherAttendance(models.Model):
+    """Attendance records for teachers stored separately from student attendance."""
+    STATUS_CHOICES = [
+        ('absent', 'Absent'),
+        ('on_time', 'On Time'),
+        ('late', 'Late'),
+    ]
+
+    # import here to avoid circular import at module import time in some cases
+    from accounts.models import Teacher
+
+    teacher = models.ForeignKey('accounts.Teacher', on_delete=models.CASCADE)
+    date = models.DateField(default=timezone.localdate)
+    time = models.TimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='absent')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-time']
+        unique_together = (('teacher', 'date'),)
+
+    def __str__(self):
+        return f"{self.teacher.name} - {self.date} ({self.status})"

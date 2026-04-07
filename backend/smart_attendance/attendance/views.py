@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .utils.face_utils import match_face
-from accounts.models import Student
+from accounts.models import Student, Teacher
 from .models import Attendance, AdminSetting, AdminToken
 from django.utils import timezone
 import os
@@ -131,18 +131,31 @@ class MarkAttendance(APIView):
             print("Error: Missing image")
             return Response({"error": "Image is required"}, status=400)
 
-        # Ensure temp directory exists and save upload
-        os.makedirs("media/temp", exist_ok=True)
+        # Ensure temp directory exists and save upload under MEDIA_ROOT/temp
+        tmp_root = os.path.join(settings.MEDIA_ROOT, "temp")
+        os.makedirs(tmp_root, exist_ok=True)
         import uuid
         tmp_name = f"{uuid.uuid4().hex}.jpg"
-        path = os.path.join("media/temp", tmp_name)
+        path = os.path.join(tmp_root, tmp_name)
         with open(path, 'wb+') as f:
             for chunk in image.chunks():
                 f.write(chunk)
 
-        # Match face against all students (ranked candidates)
+        # Match face against stored encodings (skip students already marked today)
         try:
-            candidates = match_face(path)
+            today = timezone.now().date()
+            excluded_student_ids = list(Attendance.objects.filter(date=today).values_list('student_id', flat=True))
+            # If all students are already marked today, skip matching early
+            total_students = Student.objects.count()
+            if excluded_student_ids and len(excluded_student_ids) >= total_students:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                return Response({"error": "All matched candidates already marked"}, status=200)
+
+            candidates = match_face(path, exclude_student_ids=excluded_student_ids)
             print(f"Match result: {candidates}")
             if candidates == "no_face":
                 print("Error: No face detected in image")
@@ -288,25 +301,10 @@ class MarkAttendance(APIView):
                     pass
                 return Response({"error": "Face did not match"}, status=400)
 
-        student = chosen_student
+        person = chosen_student
 
-        # Check if attendance is already marked for today
+        # Determine whether the matched person is a Student or a Teacher
         today = timezone.now().date()
-        existing_att = Attendance.objects.filter(student=student, date=today).first()
-        if existing_att:
-            print(f"Attendance already marked for {student.roll_no}")
-            return Response({
-                "message": "Attendance already marked today",
-                "name": student.name,
-                "roll_no": student.roll_no,
-                "class": student.class_group.name if student.class_group else None,
-                "batch": student.batch.name if student.batch else None,
-                "department": student.department.name if student.department else None,
-                "time": existing_att.time.isoformat() if existing_att.time else None,
-                "status": existing_att.status,
-            })
-
-        # Compute status and create record
         now_time = timezone.localtime(timezone.now()).time()
         CUTOFF_TIME = datetime_time(9, 0)
         LATE_TIME = datetime_time(9, 30)
@@ -317,16 +315,78 @@ class MarkAttendance(APIView):
         else:
             status = "late"
 
-        attendance = Attendance.objects.create(
-            student=student,
-            date=timezone.localdate(),
-            time=now_time,
-            status=status,
-            already_marked=True,
-        )
+        # If a Student -> use existing Attendance model
+        if isinstance(person, Student):
+            student = person
+            existing_att = Attendance.objects.filter(student=student, date=today).first()
+            if existing_att:
+                print(f"Attendance already marked for {student.roll_no}")
+                return Response({
+                    "message": "Attendance already marked today",
+                    "name": student.name,
+                    "roll_no": student.roll_no,
+                    "class": student.class_group.name if student.class_group else None,
+                    "batch": student.batch.name if student.batch else None,
+                    "department": student.department.name if student.department else None,
+                    "time": existing_att.time.isoformat() if existing_att.time else None,
+                    "status": existing_att.status,
+                })
+
+            attendance = Attendance.objects.create(
+                student=student,
+                date=timezone.localdate(),
+                time=now_time,
+                status=status,
+                already_marked=True,
+            )
+            saved_prefix = student.roll_no
+            display_name = student.name
+            display_id = student.roll_no
+            extra_info = {
+                "class": student.class_group.name if student.class_group else None,
+                "batch": student.batch.name if student.batch else None,
+                "department": student.department.name if student.department else None,
+            }
+
+        # If a Teacher -> use TeacherAttendance model
+        elif isinstance(person, Teacher):
+            teacher = person
+            from .models import TeacherAttendance
+            existing_att = TeacherAttendance.objects.filter(teacher=teacher, date=today).first()
+            if existing_att:
+                print(f"Teacher attendance already marked for {teacher.employee_id}")
+                return Response({
+                    "message": "Attendance already marked today",
+                    "name": teacher.name,
+                    "employee_id": teacher.employee_id,
+                    "time": existing_att.time.isoformat() if existing_att.time else None,
+                    "status": existing_att.status,
+                })
+
+            attendance = TeacherAttendance.objects.create(
+                teacher=teacher,
+                date=timezone.localdate(),
+                time=now_time,
+                status=status,
+            )
+            saved_prefix = teacher.employee_id
+            display_name = teacher.name
+            display_id = teacher.employee_id
+            extra_info = {"department": teacher.department.name if teacher.department else None}
+
+        else:
+            # Unknown object type
+            print("Matched object is neither Student nor Teacher")
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+            return Response({"error": "Matched entity type not supported"}, status=400)
 
         try:
-            saved_path = save_attendance_image_from_path(path, student.roll_no)
+            # ensure the attendance image is saved under the same date as the record
+            saved_path = save_attendance_image_from_path(path, saved_prefix, dt=attendance.date)
             logger.info(f"Saved attendance image to {saved_path}")
         except Exception as e:
             logger.exception("Failed to save attendance image: %s", e)
@@ -338,42 +398,22 @@ class MarkAttendance(APIView):
             except Exception:
                 pass
 
-        # copy to weekday folder and prune older files
-        try:
-            if saved_path and os.path.exists(saved_path):
-                weekday = attendance.date.strftime("%A")
-                dest_dir = os.path.join(settings.MEDIA_ROOT, "attendance_weekday", weekday)
-                os.makedirs(dest_dir, exist_ok=True)
-                dest_path = os.path.join(dest_dir, f"{student.roll_no}.jpg")
-                shutil.copy2(saved_path, dest_path)
+        # Images are stored in MEDIA_ROOT/temp/<weekday_folder>/<roll_no>.jpg
+        # Do not copy to a separate attendance_weekday folder — temp is the canonical store.
 
-                now_ts = datetime.now().timestamp()
-                seven_days = 7 * 24 * 3600
-                for fname in os.listdir(dest_dir):
-                    fpath = os.path.join(dest_dir, fname)
-                    try:
-                        if os.path.isfile(fpath):
-                            mtime = os.path.getmtime(fpath)
-                            if (now_ts - mtime) > seven_days:
-                                os.remove(fpath)
-                    except Exception:
-                        logger.exception("Failed to prune file %s", fpath)
-        except Exception:
-            logger.exception("Failed to copy/prune weekday attendance images")
-
-        print(f"Attendance marked for {student.name}")
-        RECENT_ATTENDANCE.appendleft(f"Attendance marked for id {student.roll_no}")
+        print(f"Attendance marked for {display_name}")
+        RECENT_ATTENDANCE.appendleft(f"Attendance marked for id {display_id}")
         _print_recent_attendance()
-        return Response({
-            "message": f"Attendance marked for {student.name}",
-            "name": student.name,
-            "roll_no": student.roll_no,
-            "class": student.class_group.name if student.class_group else None,
-            "batch": student.batch.name if student.batch else None,
-            "department": student.department.name if student.department else None,
+        # Build response with common fields; merge extra_info for type-specific data
+        resp = {
+            "message": f"Attendance marked for {display_name}",
+            "name": display_name,
+            "id": display_id,
             "time": attendance.time.isoformat() if attendance.time else None,
             "status": attendance.status,
-        })
+        }
+        resp.update(extra_info)
+        return Response(resp)
 
 
 class MostAbsentAPIView(APIView):
@@ -544,8 +584,25 @@ class AdminAuthAPIView(APIView):
             return Response({"error": "pin required"}, status=400)
 
         setting = AdminSetting.objects.first()
+        # If no admin PIN configured, automatically initialize a default PIN in DEBUG
+        # mode to avoid blocking local development. In production this will return
+        # an error and require explicit PIN setup.
         if not setting or not setting.pin_hash:
-            return Response({"error": "Admin PIN not set"}, status=400)
+            if settings.DEBUG:
+                DEFAULT_DEV_PIN = "12345"
+                try:
+                    hashed = make_password(DEFAULT_DEV_PIN)
+                    if not setting:
+                        setting = AdminSetting.objects.create(pin_hash=hashed)
+                    else:
+                        setting.pin_hash = hashed
+                        setting.save()
+                    # note: we do not reveal the PIN in the response; developers
+                    # should use the known default in DEBUG if needed.
+                except Exception:
+                    return Response({"error": "Admin PIN not set"}, status=500)
+            else:
+                return Response({"error": "Admin PIN not set"}, status=400)
 
         if not check_password(pin, setting.pin_hash):
             return Response({"error": "Invalid PIN"}, status=400)
