@@ -154,3 +154,13 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Email (SMTP) configuration - update with your credentials
+# Important: For Gmail, enable 2-Step Verification and create an App Password.
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+# Set these in environment or replace with your values (recommended: environment vars)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'sujjalboi09@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'cmcd gwdh qlvt oydy')

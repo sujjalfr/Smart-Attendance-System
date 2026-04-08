@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from accounts.views import (
     StudentViewSet,
+    TeacherViewSet,
     StudentListView,
     departments_list,
     department_detail,
@@ -44,6 +45,7 @@ from attendance.views import RecentAttendanceAPIView
 
 router = DefaultRouter()
 router.register(r'students', StudentViewSet, basename='student')
+router.register(r'teachers', TeacherViewSet, basename='teacher')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -57,7 +57,7 @@ def _find_temp_image_for_roll(roll_no):
     return candidates[0]
 
 
-def save_attendance_image_from_path(src_path, roll_no, move_src=False):
+def save_attendance_image_from_path(src_path, roll_no, move_src=False, dt=None):
     """
     Save a single canonical image at MEDIA_ROOT/temp/<weekday_folder>/<roll_no>.jpg.
     - If src_path missing, searches MEDIA_ROOT/temp and subfolders for <roll_no>.jpg.
@@ -72,7 +72,8 @@ def save_attendance_image_from_path(src_path, roll_no, move_src=False):
         else:
             raise FileNotFoundError(f"No temp image found for roll {roll_no}")
 
-    dst_dir = _ensure_dir(get_weekday_folder_for_date())
+    # Use explicit date when provided to ensure image folder matches attendance date
+    dst_dir = _ensure_dir(get_weekday_folder_for_date(dt))
     main_dst = os.path.join(dst_dir, f"{roll_no}.jpg")
 
     # If already at destination, return immediately

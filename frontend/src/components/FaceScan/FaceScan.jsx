@@ -4,7 +4,7 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
-const FaceScan = ({ onResult, autoScan = false }) => {
+const FaceScan = ({ onResult, autoScan = false, showRecent = true, videoWidth = 320, videoHeight = 240, rollNo = null, scanIntervalMs = 500 }) => {
   const webcamRef = useRef(null);
   const processingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -27,6 +27,13 @@ const FaceScan = ({ onResult, autoScan = false }) => {
       setIsCapturing(true);
     }
   }, [autoScan]);
+
+  // If a manual roll number is provided, auto-start capture for manual flow
+  useEffect(() => {
+    if (rollNo && !autoScan) {
+      setIsCapturing(true);
+    }
+  }, [rollNo, autoScan]);
 
   
 
@@ -62,6 +69,8 @@ const FaceScan = ({ onResult, autoScan = false }) => {
         const blob = await (await fetch(imageSrc)).blob();
         const formData = new FormData();
         formData.append("image", blob, "face.jpg");
+        // Include an optional roll number hint when provided (manual flow)
+        if (rollNo) formData.append("roll_no", rollNo);
 
         const resp = await axios.post(
           `${API_BASE}/api/attendance/`,
@@ -187,7 +196,7 @@ const FaceScan = ({ onResult, autoScan = false }) => {
           setLoading(false);
         }
       }
-    }, 1000);
+    }, scanIntervalMs);
 
     return () => {
       clearInterval(intervalId);
@@ -197,6 +206,8 @@ const FaceScan = ({ onResult, autoScan = false }) => {
 
   // Poll recent attendance on mount so UI shows stacked recent items even when not scanning
   useEffect(() => {
+    // Only poll recent attendance when the component actually shows recent UI
+    if (!showRecent) return;
     let poll = setInterval(async () => {
       try {
         const r = await axios.get(`${API_BASE}/api/attendance/recent/`);
@@ -213,19 +224,19 @@ const FaceScan = ({ onResult, autoScan = false }) => {
       } catch (e) {}
     })();
     return () => clearInterval(poll);
-  }, []);
+  }, [showRecent]);
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full">
       <h2 className="mb-4 text-lg font-semibold">Scan Face</h2>
       <Webcam
         audio={false}
         ref={webcamRef}
         screenshotFormat="image/jpeg"
-        width={320}
-        height={240}
+        width={videoWidth}
+        height={videoHeight}
         videoConstraints={{ facingMode: "user" }}
-        style={{ width: "100%", transform: "scaleX(-1)" }}
+        style={{ width: "100%", maxWidth: videoWidth, transform: "scaleX(-1)" }}
         className="rounded-lg shadow mb-4"
       />
       {!isCapturing && !autoScan && (
@@ -237,22 +248,24 @@ const FaceScan = ({ onResult, autoScan = false }) => {
         </button>
       )}
       {loading && <p className="text-blue-500">Scanning face...</p>}
-      <div className="w-full max-w-md mt-4">
-        <h3 className="font-semibold">Recent attendance (most recent on top)</h3>
-        <div className="mt-2 bg-white shadow rounded p-2" style={{maxHeight: 240, overflowY: 'auto'}}>
-          {recent && recent.filter(r => r && r.startsWith && r.startsWith('Attendance marked')).length ? (
-            recent
-              .filter(r => r && r.startsWith && r.startsWith('Attendance marked'))
-              .map((item, idx) => (
-                <div key={idx} className="text-sm py-1 border-b last:border-b-0">
-                  {item}
-                </div>
-              ))
-          ) : (
-            <div className="text-sm text-gray-500">No recent attendance</div>
-          )}
+      {showRecent && (
+        <div className="w-full max-w-md mt-4">
+          <h3 className="font-semibold">Recent attendance (most recent on top)</h3>
+          <div className="mt-2 bg-white shadow rounded p-2" style={{maxHeight: 240, overflowY: 'auto'}}>
+            {recent && recent.filter(r => r && r.startsWith && r.startsWith('Attendance marked')).length ? (
+              recent
+                .filter(r => r && r.startsWith && r.startsWith('Attendance marked'))
+                .map((item, idx) => (
+                  <div key={idx} className="text-sm py-1 border-b last:border-b-0">
+                    {item}
+                  </div>
+                ))
+            ) : (
+              <div className="text-sm text-gray-500">No recent attendance</div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
