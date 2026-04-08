@@ -1,6 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .utils.face_utils import match_face
+import subprocess
+import sys
+import json
 from accounts.models import Student, Teacher
 from .models import Attendance, AdminSetting, AdminToken
 from django.utils import timezone
@@ -155,11 +158,88 @@ class MarkAttendance(APIView):
                     pass
                 return Response({"error": "All matched candidates already marked"}, status=200)
 
-            candidates = match_face(path, exclude_student_ids=excluded_student_ids)
-            print(f"Match result: {candidates}")
+            # Run face matching in a separate process to isolate native/C crashes
+            try:
+                runner_path = os.path.join(os.path.dirname(__file__), "match_runner.py")
+                exclude_arg = ",".join(str(x) for x in (excluded_student_ids or []))
+                proc = subprocess.run([
+                    sys.executable,
+                    runner_path,
+                    path,
+                    exclude_arg,
+                ], capture_output=True, text=True, timeout=30)
+                stdout = proc.stdout.strip()
+                stderr = proc.stderr.strip()
+                if proc.returncode != 0:
+                    print("match_runner failed:", stderr or stdout)
+                    raise RuntimeError(stderr or stdout or "match_runner error")
+                try:
+                    parsed = json.loads(stdout) if stdout else {}
+                except Exception:
+                    print("Failed to parse match_runner output:", stdout)
+                    raise
+
+                if parsed.get("status") == "no_face":
+                    print("Match result: no_face")
+                    try:
+                        if os.path.exists(path):
+                            os.remove(path)
+                    except Exception:
+                        pass
+                    return Response({"error": "No face detected in image"}, status=400)
+
+                if parsed.get("status") == "error":
+                    print("match_runner error:", parsed.get("error"))
+                    raise RuntimeError(parsed.get("error"))
+
+                # rebuild candidates list using DB lookups (we only have ids in runner output)
+                runner_candidates = parsed.get("candidates") or []
+                candidates = []
+                for item in runner_candidates:
+                    pid = item.get("id")
+                    dist = item.get("distance")
+                    # try to find student by roll_no or teacher by employee_id
+                    person = None
+                    try:
+                        if pid is not None:
+                            person = Student.objects.filter(roll_no=pid).first()
+                            if not person:
+                                from accounts.models import Teacher
+                                person = Teacher.objects.filter(employee_id=pid).first()
+                    except Exception:
+                        person = None
+                    if person:
+                        candidates.append((person, dist))
+                print(f"Match result (from runner): {[(getattr(p, 'roll_no', getattr(p,'employee_id',None)), d) for p,d in candidates]}")
+            except subprocess.TimeoutExpired:
+                print("match_runner timed out")
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                return Response({"error": "Timeout during face matching"}, status=500)
+            except Exception as e:
+                print(f"Exception during face matching (runner): {e}")
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                return Response({"error": f"Error processing image: {str(e)}"}, status=500)
             if candidates == "no_face":
                 print("Error: No face detected in image")
                 try:
+                    # Save a copy of the failed image for offline inspection
+                    failed_dir = os.path.join(settings.MEDIA_ROOT, "temp", "failed_samples")
+                    os.makedirs(failed_dir, exist_ok=True)
+                    try:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        failed_path = os.path.join(failed_dir, f"no_face_{timestamp}_{tmp_name}")
+                        shutil.copy(path, failed_path)
+                        print(f"Saved failed attendance image for inspection: {failed_path}")
+                    except Exception as e:
+                        print("Failed to save failed sample:", e)
                     if os.path.exists(path):
                         os.remove(path)
                 except Exception:
