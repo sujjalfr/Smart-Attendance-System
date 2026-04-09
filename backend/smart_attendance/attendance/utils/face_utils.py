@@ -12,6 +12,24 @@ _ENCODINGS_CACHE_TS = 0
 _ENCODINGS_CACHE_TTL = 30.0  # seconds
 
 
+def warm_encodings(exclude_student_ids=None):
+    """Force-load encodings into module cache. Returns (count, elapsed_seconds)."""
+    global _ENCODINGS_CACHE, _ENCODINGS_CACHE_TS
+    import time as _time
+    import logging
+    logger = logging.getLogger(__name__)
+    t0 = _time.time()
+    try:
+        persons = _load_encodings_from_db(exclude_student_ids=exclude_student_ids)
+        _ENCODINGS_CACHE = persons
+        _ENCODINGS_CACHE_TS = _time.time()
+        logger.info("warm_encodings: loaded %d encodings in %.2fs", len(persons), _time.time() - t0)
+        return (len(persons), _time.time() - t0)
+    except Exception as e:
+        logger.exception("warm_encodings failed")
+        return (0, _time.time() - t0)
+
+
 def _load_encodings_from_db(exclude_student_ids=None):
     """Return list of (person_obj, encoding_np) for students (and teachers) excluding IDs."""
     from accounts.models import Student

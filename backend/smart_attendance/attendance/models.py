@@ -8,6 +8,7 @@ class Attendance(models.Model):
         ('absent', 'Absent'),
         ('on_time', 'On Time'),
         ('late', 'Late'),
+        ('leave', 'On Leave'),
     ]
     
     student = models.ForeignKey(Student, on_delete=models.CASCADE)
@@ -17,6 +18,8 @@ class Attendance(models.Model):
     already_marked = models.BooleanField(default=False)  # Track if marked
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Track whether an absent notification email has been sent for this record
+    absent_email_sent = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-date', '-time']
@@ -53,6 +56,7 @@ class TeacherAttendance(models.Model):
         ('absent', 'Absent'),
         ('on_time', 'On Time'),
         ('late', 'Late'),
+        ('leave', 'On Leave'),
     ]
 
     # import here to avoid circular import at module import time in some cases
@@ -62,6 +66,7 @@ class TeacherAttendance(models.Model):
     date = models.DateField(default=timezone.localdate)
     time = models.TimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='absent')
+    already_marked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

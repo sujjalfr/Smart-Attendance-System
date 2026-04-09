@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from .utils.face_utils import match_face
 from accounts.models import Student, Teacher
-from .models import Attendance, AdminSetting, AdminToken
+from .models import Attendance, AdminSetting, AdminToken, TeacherAttendance
 from django.utils import timezone
 import os
 from django.db.models import Count
@@ -29,9 +29,11 @@ from collections import deque
 
 # In-memory recent attendance events (most recent first)
 RECENT_ATTENDANCE = deque(maxlen=8)
-# Matching configuration: stricter threshold to avoid false positives
-STRICT_MATCH_THRESHOLD = 0.5  # maximum allowed distance for an automatic match
-MIN_TOP_SEPARATION = 0.06     # minimum distance gap between top-2 candidates to be unambiguous
+# Matching configuration: slightly relaxed threshold to reduce false negatives
+# Increase threshold from 0.5 -> 0.6 to accept borderline but valid matches.
+STRICT_MATCH_THRESHOLD = 0.6  # maximum allowed distance for an automatic match
+# Keep a modest required separation between top-2 candidates to avoid ambiguous picks
+MIN_TOP_SEPARATION = 0.05     # minimum distance gap between top-2 candidates to be unambiguous
 
 def _print_recent_attendance():
     try:
@@ -119,6 +121,69 @@ class AttendanceStatusList(APIView):
                 "status": att.status if att else "absent",
             })
         
+        return Response({"results": result})
+
+
+class TeacherAttendanceStatus(APIView):
+    def get(self, request):
+        employee_id = request.query_params.get("employee_id")
+        if not employee_id:
+            return Response({"error": "employee_id required"}, status=400)
+
+        try:
+            teacher = Teacher.objects.select_related("department").get(employee_id=employee_id)
+        except Teacher.DoesNotExist:
+            return Response({"error": "Teacher not found"}, status=404)
+
+        today = timezone.now().date()
+        att = TeacherAttendance.objects.filter(teacher=teacher, date=today).first()
+        # use the actual stored flag when available
+        exists = att is not None
+
+        return Response({
+            "id": att.id if att else None,
+            "alreadyMarked": att.already_marked if att else False,
+            "employee_id": teacher.employee_id,
+            "name": teacher.name,
+            "email": teacher.email,
+            "department": teacher.department.name if teacher.department else None,
+            "time": att.time.isoformat() if att and att.time else None,
+            "status": att.status if att else "absent",
+        })
+
+
+class TeacherAttendanceStatusList(APIView):
+    """List attendance status for all teachers for a given date (defaults to today)."""
+    def get(self, request):
+        date_str = request.query_params.get("date")
+        try:
+            if date_str:
+                target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            else:
+                target_date = timezone.now().date()
+        except Exception:
+            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+        teachers = Teacher.objects.select_related("department").all()
+        att_map = {
+            a.teacher_id: a
+            for a in TeacherAttendance.objects.filter(date=target_date).select_related("teacher")
+        }
+
+        result = []
+        for teacher in teachers:
+            att = att_map.get(teacher.id)
+            result.append({
+                "id": att.id if att else teacher.id,
+                "employee_id": teacher.employee_id,
+                "name": teacher.name,
+                "email": teacher.email,
+                "department": teacher.department.name if teacher.department else None,
+                "alreadyMarked": att.already_marked if att else False,
+                "time": att.time.isoformat() if att and att.time else None,
+                "status": att.status if att else "absent",
+            })
+
         return Response({"results": result})
 
 class MarkAttendance(APIView):
@@ -378,6 +443,7 @@ class MarkAttendance(APIView):
                 date=timezone.localdate(),
                 time=now_time,
                 status=status,
+                already_marked=True,
             )
             saved_prefix = teacher.employee_id
             display_name = teacher.name
@@ -475,6 +541,11 @@ from rest_framework import status
 from django.db.models import Q
 from rest_framework import generics
 from .serializers import AttendanceSerializer
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.db import transaction
+import threading
 
 class StudentAttendanceDetail(APIView):
     """
@@ -556,6 +627,83 @@ class StudentAttendanceDetail(APIView):
             "records": records,
         })
 
+
+class TeacherAttendanceDetail(APIView):
+    """
+    Returns attendance stats and records for a teacher.
+    Query params:
+      - date_from (YYYY-MM-DD, optional)
+      - date_to (YYYY-MM-DD, optional)
+    """
+    def get(self, request, employee_id):
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
+
+        try:
+            teacher = Teacher.objects.select_related("department").get(employee_id=employee_id)
+        except Teacher.DoesNotExist:
+            return Response({"error": "Teacher not found"}, status=404)
+
+        qs = TeacherAttendance.objects.filter(teacher=teacher)
+
+        start = end = None
+        try:
+            if date_from:
+                start = datetime.strptime(date_from, "%Y-%m-%d").date()
+                qs = qs.filter(date__gte=start)
+            if date_to:
+                end = datetime.strptime(date_to, "%Y-%m-%d").date()
+                qs = qs.filter(date__lte=end)
+        except ValueError:
+            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+
+        if start is None or end is None:
+            if qs.exists():
+                start = qs.order_by("date").first().date
+                end = qs.order_by("-date").first().date
+
+        all_dates = []
+        if start and end and end >= start:
+            delta = (end - start).days
+            all_dates = [start + timedelta(days=i) for i in range(delta + 1)]
+
+        present_days = qs.count()
+        present_dates = set(qs.values_list("date", flat=True))
+        absent_days = len([d for d in all_dates if d not in present_dates]) if all_dates else 0
+        total_days = len(all_dates) if all_dates else present_days
+
+        status_counts = {"on_time": 0, "late": 0}
+        for att in qs:
+            if att.status == "on_time":
+                status_counts["on_time"] += 1
+            elif att.status == "late":
+                status_counts["late"] += 1
+
+        records = [
+            {
+                "id": a.id,
+                "attendanceId": a.id,
+                "date": a.date.isoformat(),
+                "time": (a.time.isoformat() if a.time else None),
+                "status": a.status,
+                "alreadyMarked": a.already_marked,
+            }
+            for a in qs.order_by("-date")
+        ]
+
+        return Response({
+            "employee_id": teacher.employee_id,
+            "name": teacher.name,
+            "email": teacher.email,
+            "department": teacher.department.name if teacher.department else None,
+            "present_days": present_days,
+            "absent_days": absent_days,
+            "on_time_days": status_counts["on_time"],
+            "late_days": status_counts["late"],
+            "total_days": total_days,
+            "records": records,
+        })
+
 class AttendanceUpdateAPIView(generics.RetrieveUpdateAPIView):
     queryset = Attendance.objects.all()
     serializer_class = AttendanceSerializer
@@ -569,6 +717,26 @@ class AttendanceUpdateAPIView(generics.RetrieveUpdateAPIView):
             logger.exception("Error updating attendance: %s", e)
             return Response(
                 {"detail": f"Failed to update attendance: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+from .serializers import TeacherAttendanceSerializer
+
+
+class TeacherAttendanceUpdateAPIView(generics.RetrieveUpdateAPIView):
+    queryset = TeacherAttendance.objects.all()
+    serializer_class = TeacherAttendanceSerializer
+    lookup_field = "pk"
+
+    def patch(self, request, *args, **kwargs):
+        """Handle PATCH request for partial updates"""
+        try:
+            return super().patch(request, *args, **kwargs)
+        except Exception as e:
+            logger.exception("Error updating teacher attendance: %s", e)
+            return Response(
+                {"detail": f"Failed to update teacher attendance: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -639,6 +807,131 @@ class AdminAuthValidateAPIView(APIView):
             token.delete()
             return Response({"valid": False}, status=401)
         return Response({"valid": True})
+
+
+class AdminSendEmailAPIView(APIView):
+    """POST endpoint to compose and send emails to selected students/teachers.
+
+    Body params (JSON):
+      - filter: one of ['absent_today','absent_date','absent_yesterday','most_absent','students']
+      - date: YYYY-MM-DD (for absent_date)
+      - days: int (for most_absent)
+      - student_ids: [int] (for students)
+      - subject: string
+      - message: string (plain text)
+      - html_message: optional html
+
+    Requires X-Admin-Token header with valid admin token (or DEBUG mode).
+    """
+    def post(self, request):
+        token_key = request.headers.get("X-Admin-Token") or request.data.get("token")
+        if not token_key and not settings.DEBUG:
+            return Response({"error": "Admin token required"}, status=401)
+        if token_key:
+            try:
+                token = AdminToken.objects.get(key=token_key)
+                if token.is_expired():
+                    token.delete()
+                    return Response({"error": "Admin token expired"}, status=401)
+            except AdminToken.DoesNotExist:
+                return Response({"error": "Invalid admin token"}, status=401)
+
+        data = request.data or {}
+        filter_type = data.get("filter")
+        subject = data.get("subject") or "Notification"
+        message = data.get("message") or ""
+        html_message = data.get("html_message")
+
+        recipients = []
+        try:
+            today = timezone.localdate()
+            if filter_type == "absent_today":
+                qs = Attendance.objects.filter(date=today, status='absent').select_related('student')
+                for a in qs:
+                    if a.student and a.student.email:
+                        recipients.append((a.student.email, a.student))
+            elif filter_type == "absent_yesterday":
+                d = today - timedelta(days=1)
+                qs = Attendance.objects.filter(date=d, status='absent').select_related('student')
+                for a in qs:
+                    if a.student and a.student.email:
+                        recipients.append((a.student.email, a.student))
+            elif filter_type == "absent_date":
+                date_str = data.get("date")
+                try:
+                    d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                except Exception:
+                    return Response({"error": "Invalid date format"}, status=400)
+                qs = Attendance.objects.filter(date=d, status='absent').select_related('student')
+                for a in qs:
+                    if a.student and a.student.email:
+                        recipients.append((a.student.email, a.student))
+            elif filter_type == "most_absent":
+                days = int(data.get("days", 7))
+                # reuse most-absent logic: get absences by computing presents then absences
+                end = today
+                start = end - timedelta(days=days-1)
+                present_qs = Attendance.objects.filter(date__range=(start, end))
+                present_counts = present_qs.values('student_id')\
+                                   .annotate(presents=Count('id'))
+                presents_map = {p['student_id']: p['presents'] for p in present_counts}
+                students = Student.objects.all()
+                # compute absences and pick those with highest absences
+                result = []
+                for s in students:
+                    presents = presents_map.get(s.id, 0)
+                    absences = days - presents
+                    result.append((absences, s))
+                result.sort(key=lambda x: x[0], reverse=True)
+                limit = int(data.get('limit', 10))
+                for absences, s in result[:limit]:
+                    if s.email:
+                        recipients.append((s.email, s))
+            elif filter_type == "students":
+                ids = data.get('student_ids', []) or []
+                qs = Student.objects.filter(id__in=ids)
+                for s in qs:
+                    if s.email:
+                        recipients.append((s.email, s))
+            else:
+                return Response({"error": "Unknown filter type"}, status=400)
+        except Exception as e:
+            logger.exception("Failed to collect recipients: %s", e)
+            return Response({"error": "Failed to collect recipients"}, status=500)
+
+        emails = [r[0] for r in recipients]
+        if not emails:
+            return Response({"sent": 0, "queued": 0, "message": "No recipients found"})
+
+        def _send_all(to_list):
+            sent = 0
+            for (addr, stud) in to_list:
+                try:
+                    # personalize message via template if needed
+                    ctx = {"student": stud}
+                    body = message
+                    html = html_message
+                    try:
+                        # render if templates provided in message using simple vars
+                        body = render_to_string('emails/admin_plain.txt', {**ctx, 'body': message})
+                    except Exception:
+                        pass
+                    try:
+                        if html_message:
+                            html = render_to_string('emails/admin_html.html', {**ctx, 'body': html_message})
+                    except Exception:
+                        pass
+
+                    send_mail(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', settings.EMAIL_HOST_USER), [addr], html_message=html, fail_silently=False)
+                    sent += 1
+                except Exception as e:
+                    logger.exception('Failed to send admin email to %s: %s', addr, e)
+            logger.info('Admin bulk email: attempted %d, sent %d', len(to_list), sent)
+
+        # send in background thread so admin UI doesn't block
+        threading.Thread(target=_send_all, args=(recipients,)).start()
+
+        return Response({"queued": len(recipients), "message": "Emails are being sent in background"}, status=202)
 
 class AdminPinAPIView(APIView):
     """

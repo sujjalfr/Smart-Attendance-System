@@ -38,8 +38,10 @@ from attendance.views import (
     AttendanceStatus, AttendanceStatusList, MarkAttendance,
     MostAbsentAPIView, ExportAttendanceExcelAPIView,
     StudentAttendanceDetail, AttendanceUpdateAPIView,
+    TeacherAttendanceStatus, TeacherAttendanceStatusList,
+    TeacherAttendanceDetail, TeacherAttendanceUpdateAPIView,
     AdminAuthAPIView, AdminAuthValidateAPIView, AdminPinAPIView,
-    AdminPinResetAPIView,
+    AdminPinResetAPIView, AdminSendEmailAPIView,
 )
 from attendance.views import RecentAttendanceAPIView
 
@@ -54,9 +56,13 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/attendanceStatus/', AttendanceStatus.as_view()),
     path('api/attendanceStatus/list/', AttendanceStatusList.as_view()),
+    path('api/teacher-attendance-status/', TeacherAttendanceStatus.as_view()),
+    path('api/teacher-attendance-status/list/', TeacherAttendanceStatusList.as_view()),
     path('api/attendance/', MarkAttendance.as_view()),
     path('api/attendance/<int:pk>/', AttendanceUpdateAPIView.as_view()),
+    path('api/teacher-attendance/<int:pk>/', TeacherAttendanceUpdateAPIView.as_view()),
     path('api/student/<str:roll_no>/attendance/', StudentAttendanceDetail.as_view()),
+    path('api/teacher/<str:employee_id>/attendance/', TeacherAttendanceDetail.as_view()),
     path('api/students/', StudentListView.as_view()),
     path('api/departments/', departments_list),
     path('api/departments/<int:dept_id>/', department_detail),
@@ -74,6 +80,8 @@ urlpatterns = [
     path('api/admin/pin/', AdminPinAPIView.as_view()),
     # DEBUG-only: reset admin PIN to default (remove in production)
     path('api/admin/pin/reset-default/', AdminPinResetAPIView.as_view()),
+    path('api/admin/send-email/', AdminSendEmailAPIView.as_view()),
+    path('api/attendance/most-absent/', MostAbsentAPIView.as_view()),
     path('api/attendance/recent/', RecentAttendanceAPIView.as_view()),
 ]
 

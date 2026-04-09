@@ -12,6 +12,16 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+import environ
+
+# Read environment variables from .env file (if present)
+env = environ.Env(
+    # set casting, default values
+    DEBUG=(bool, True),
+)
+env_file = os.path.join(Path(__file__).resolve().parent.parent, '.env')
+if os.path.exists(env_file):
+    environ.Env.read_env(env_file)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,9 +34,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-=^l@zcfi$y3@@br(9o6luzy_t8_3q+)%7)!9b0)20pv85)(9!_'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool('DEBUG', True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
 
 # Application definition
@@ -164,3 +174,10 @@ EMAIL_USE_TLS = True
 # Set these in environment or replace with your values (recommended: environment vars)
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'sujjalboi09@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'cmcd gwdh qlvt oydy')
+
+# Default from email
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+# Use console backend in DEBUG unless explicitly overridden via env
+if DEBUG and not os.environ.get('EMAIL_BACKEND'):
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

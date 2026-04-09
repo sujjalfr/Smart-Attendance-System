@@ -1,0 +1,8 @@
+Dear Guardian,
+
+This is to inform you that {{ student.name }} (Roll: {{ student.roll_no }}) was marked absent on {{ attendance.date }}.
+
+If you believe this is an error, please contact the administration.
+
+Regards,
+Administration
