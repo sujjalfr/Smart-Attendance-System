@@ -48,10 +48,11 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 class TeacherAttendanceSerializer(serializers.ModelSerializer):
     time = serializers.TimeField(format='%H:%M:%S', allow_null=True, required=False)
+    alreadyMarked = serializers.BooleanField(source='already_marked', required=False)
 
     class Meta:
         model = TeacherAttendance
-        fields = ['id', 'teacher', 'date', 'time', 'status']
+        fields = ['id', 'teacher', 'date', 'time', 'status', 'alreadyMarked']
         read_only_fields = ['teacher', 'date']
 
     def validate_time(self, value):
@@ -60,18 +61,31 @@ class TeacherAttendanceSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
+        # Allow explicit status/already_marked to override automatic inference
         if 'time' in validated_data:
             instance.time = validated_data['time']
-        # Simple status logic similar to students
-        if instance.time:
-            from datetime import time as datetime_time
-            CUTOFF_TIME = datetime_time(9, 0)
-            LATE_TIME = datetime_time(9, 30)
-            if instance.time <= CUTOFF_TIME:
-                instance.status = 'on_time'
-            else:
-                instance.status = 'late'
+
+        if 'already_marked' in validated_data:
+            instance.already_marked = validated_data['already_marked']
+
+        # If status explicitly provided, respect it (useful for marking leave/absent)
+        if 'status' in validated_data:
+            instance.status = validated_data['status']
+            # if mark as leave or absent, clear time
+            if instance.status == 'leave' or instance.status == 'absent':
+                instance.time = None
         else:
-            instance.status = 'absent'
+            # Auto-infer status from time (default behavior)
+            if instance.time:
+                from datetime import time as datetime_time
+                CUTOFF_TIME = datetime_time(9, 0)
+                LATE_TIME = datetime_time(9, 30)
+                if instance.time <= CUTOFF_TIME:
+                    instance.status = 'on_time'
+                else:
+                    instance.status = 'late'
+            else:
+                instance.status = 'absent'
+
         instance.save()
         return instance

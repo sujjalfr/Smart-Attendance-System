@@ -118,6 +118,10 @@ class StudentSerializer(serializers.ModelSerializer):
 
 class TeacherSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(write_only=True, required=False)
+    department = serializers.SerializerMethodField(read_only=True)
+
+    # Write field for FK relationship
+    department_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -127,10 +131,12 @@ class TeacherSerializer(serializers.ModelSerializer):
             "employee_id",
             "name",
             "email",
+            "phone",
             "face_encoding",
             "image",
             "image_url",
             "department",
+            "department_id",
             "created_at",
         ]
         read_only_fields = ["face_encoding", "created_at", "image_url"]
@@ -145,3 +151,19 @@ class TeacherSerializer(serializers.ModelSerializer):
             except Exception:
                 return None
         return None
+
+    def get_department(self, obj):
+        if obj.department:
+            return {"id": obj.department.id, "name": obj.department.name}
+        return None
+
+    def update(self, instance, validated_data):
+        """Handle update with proper FK field handling"""
+        if "department_id" in validated_data:
+            dept_id = validated_data.pop("department_id")
+            if dept_id:
+                instance.department_id = dept_id
+            else:
+                instance.department = None
+
+        return super().update(instance, validated_data)

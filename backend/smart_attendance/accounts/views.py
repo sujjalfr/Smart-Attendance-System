@@ -60,6 +60,7 @@ def departments_list(request):
 
 @csrf_exempt
 def department_detail(request, dept_id):
+    # DELETE: remove department
     if request.method == "DELETE":
         if not _admin_token_valid(request):
             return JsonResponse({"error": "Unauthorized"}, status=403)
@@ -67,6 +68,25 @@ def department_detail(request, dept_id):
         if deleted:
             return JsonResponse({"ok": True})
         return JsonResponse({"error": "Not found"}, status=404)
+
+    # PATCH/PUT: update department name
+    if request.method in ("PATCH", "PUT"):
+        if not _admin_token_valid(request):
+            return JsonResponse({"error": "Unauthorized"}, status=403)
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+            name = payload.get("name")
+            if not name:
+                return JsonResponse({"error": "Missing name"}, status=400)
+            d = Department.objects.filter(id=dept_id).first()
+            if not d:
+                return JsonResponse({"error": "Not found"}, status=404)
+            d.name = name
+            d.save()
+            return JsonResponse({"id": d.id, "name": d.name})
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -96,6 +116,7 @@ def all_batches(request):
 
 @csrf_exempt
 def batch_detail(request, batch_id):
+    # DELETE: remove batch
     if request.method == "DELETE":
         if not _admin_token_valid(request):
             return JsonResponse({"error": "Unauthorized"}, status=403)
@@ -103,6 +124,25 @@ def batch_detail(request, batch_id):
         if deleted:
             return JsonResponse({"ok": True})
         return JsonResponse({"error": "Not found"}, status=404)
+
+    # PATCH/PUT: update batch name
+    if request.method in ("PATCH", "PUT"):
+        if not _admin_token_valid(request):
+            return JsonResponse({"error": "Unauthorized"}, status=403)
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+            name = payload.get("name")
+            if not name:
+                return JsonResponse({"error": "Missing name"}, status=400)
+            b = Batch.objects.filter(id=batch_id).first()
+            if not b:
+                return JsonResponse({"error": "Not found"}, status=404)
+            b.name = name
+            b.save()
+            return JsonResponse({"id": b.id, "name": b.name})
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -155,6 +195,7 @@ def all_classgroups(request):
 
 @csrf_exempt
 def classgroup_detail(request, classgroup_id):
+    # DELETE: remove class group
     if request.method == "DELETE":
         if not _admin_token_valid(request):
             return JsonResponse({"error": "Unauthorized"}, status=403)
@@ -162,6 +203,25 @@ def classgroup_detail(request, classgroup_id):
         if deleted:
             return JsonResponse({"ok": True})
         return JsonResponse({"error": "Not found"}, status=404)
+
+    # PATCH/PUT: update class group name
+    if request.method in ("PATCH", "PUT"):
+        if not _admin_token_valid(request):
+            return JsonResponse({"error": "Unauthorized"}, status=403)
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+            name = payload.get("name")
+            if not name:
+                return JsonResponse({"error": "Missing name"}, status=400)
+            c = ClassGroup.objects.filter(id=classgroup_id).first()
+            if not c:
+                return JsonResponse({"error": "Not found"}, status=404)
+            c.name = name
+            c.save()
+            return JsonResponse({"id": c.id, "name": c.name, "department_id": c.department.id if c.department else None, "batch_id": c.batch.id if c.batch else None})
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 

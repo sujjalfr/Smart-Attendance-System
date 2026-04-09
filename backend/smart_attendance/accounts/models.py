@@ -156,6 +156,7 @@ class Teacher(models.Model):
     employee_id = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=100)
     email = models.EmailField(max_length=254, null=True, blank=True, help_text="Teacher email for notifications")
+    phone = models.CharField(max_length=32, null=True, blank=True, help_text="Teacher phone number")
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
     face_encoding = models.BinaryField(default=default_encoding, null=True, blank=True)
     image = models.ImageField(upload_to=teacher_image_upload_path, null=True, blank=True)

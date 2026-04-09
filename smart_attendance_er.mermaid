@@ -1,0 +1,116 @@
+%% ============================================================
+%% Smart Attendance System - Complete ER Diagram (Backend Schema)
+%% Source: backend/smart_attendance/accounts/models.py
+%%         backend/smart_attendance/attendance/models.py
+%% ============================================================
+
+erDiagram
+
+	%% =========================
+	%% CORE ACADEMIC ENTITIES
+	%% =========================
+
+	DEPARTMENT {
+		int id PK "AutoField"
+		varchar_100 name "UNIQUE, NOT NULL"
+	}
+
+	BATCH {
+		int id PK "AutoField"
+		varchar_50 name "NOT NULL; e.g. batch2080"
+		int start_year "NULL"
+	}
+
+	CLASS_GROUP {
+		int id PK "AutoField"
+		varchar_50 name "NOT NULL; e.g. 10A or BCA-1"
+		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
+		int batch_id FK "NULL -> BATCH.id (SET_NULL)"
+	}
+
+	%% =========================
+	%% PEOPLE ENTITIES
+	%% =========================
+
+	STUDENT {
+		int id PK "AutoField"
+		varchar_20 roll_no "UNIQUE, NOT NULL"
+		varchar_100 name "NOT NULL"
+		email email "NULL, blank allowed"
+		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
+		int batch_id FK "NULL -> BATCH.id (SET_NULL)"
+		int class_group_id FK "NULL -> CLASS_GROUP.id (SET_NULL)"
+		binary face_encoding "NULL/blank; default=128-dim float64 zeros"
+		image image "NULL/blank; upload_to=students/"
+		image qr_code "NULL/blank; upload_to=qr_codes/; auto-generated from roll_no"
+		datetime created_at "auto_now_add"
+	}
+
+	TEACHER {
+		int id PK "AutoField"
+		varchar_30 employee_id "UNIQUE, NOT NULL"
+		varchar_100 name "NOT NULL"
+		email email "NULL, blank allowed"
+		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
+		binary face_encoding "NULL/blank; default=128-dim float64 zeros"
+		image image "NULL/blank; upload_to=teachers/"
+		datetime created_at "auto_now_add"
+	}
+
+	%% =========================
+	%% ATTENDANCE ENTITIES
+	%% =========================
+
+	ATTENDANCE {
+		int id PK "AutoField"
+		int student_id FK "NOT NULL -> STUDENT.id (CASCADE)"
+		date date "default=localdate"
+		time time "NULL/blank"
+		varchar_20 status "NOT NULL; choices: absent|on_time|late; default=absent"
+		bool already_marked "default=false"
+		datetime created_at "auto_now_add"
+		datetime updated_at "auto_now"
+		constraint uq_attendance_student_date "UNIQUE(student_id, date)"
+	}
+
+	%% =========================
+	%% ADMIN / AUTH SUPPORT ENTITIES
+	%% =========================
+
+	ADMIN_SETTING {
+		int id PK "AutoField"
+		varchar_255 pin_hash "NULL/blank"
+		datetime updated_at "auto_now"
+	}
+
+	ADMIN_TOKEN {
+		int id PK "AutoField"
+		varchar_64 key "UNIQUE, NOT NULL"
+		datetime created_at "default=now"
+	}
+
+	%% =========================
+	%% RELATIONSHIPS (CARDINALITY)
+	%% =========================
+
+	DEPARTMENT ||--o{ CLASS_GROUP : "organizes"
+	BATCH ||--o{ CLASS_GROUP : "groups"
+
+	DEPARTMENT ||--o{ STUDENT : "contains"
+	BATCH ||--o{ STUDENT : "contains"
+	CLASS_GROUP ||--o{ STUDENT : "contains"
+
+	DEPARTMENT ||--o{ TEACHER : "contains"
+
+	STUDENT ||--o{ ATTENDANCE : "has daily records"
+
+	%% =========================
+	%% IMPLEMENTATION NOTES
+	%% =========================
+	%% - Optional FKs in STUDENT / CLASS_GROUP / TEACHER use ON DELETE SET NULL.
+	%% - Attendance tables use ON DELETE CASCADE from parent person table.
+	%% - ATTENDANCE unique_together(student, date) ensures one row per student per day.
+	%% - ATTENDANCE has default ordering: -date, -time.
+	%% - ADMIN_SETTING acts as singleton-ish config table (application-level behavior).
+	%% - ADMIN_TOKEN expiry is enforced in app logic (not DB constraint).
+

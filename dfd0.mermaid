@@ -1,0 +1,34 @@
+flowchart LR
+	%% Level-0 (Context) DFD - Smart Attendance System
+
+	Admin[Admin]
+	Student[Student]
+	Teacher[Teacher]
+	Camera[Camera / Biometric Device]
+	Notify[Notification Service]
+
+	SAS((Smart Attendance System))
+
+	Admin -->|Admin PIN Login Request| SAS
+	SAS -->|Auth Token Access Response| Admin
+
+	Admin -->|Student Teacher Setup and Class Configuration Data| SAS
+	SAS -->|Dashboard Data Reports and Export Files| Admin
+
+	Student -->|Face Scan Input and Manual Roll Input| SAS
+	SAS -->|Attendance Result Status| Student
+
+	Teacher -->|Face Scan Input and Employee ID Input| SAS
+	SAS -->|Attendance Result Status| Teacher
+
+	Camera -->|Live Face Image Stream| SAS
+	SAS -->|Scan Trigger and Capture Feedback| Camera
+
+	SAS -->|Notification Details for Absence and Attendance| Notify
+	Notify -->|Delivery Status and Failure Info| SAS
+
+	classDef external fill:#ffffff,stroke:#333,stroke-width:1px,color:#111;
+	classDef process fill:#e6f0ff,stroke:#1d4ed8,stroke-width:1.5px,color:#111;
+
+	class Admin,Student,Teacher,Camera,Notify external;
+	class SAS process;

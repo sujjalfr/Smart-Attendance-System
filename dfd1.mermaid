@@ -1,0 +1,78 @@
+flowchart LR
+	%% Level-1 DFD - Smart Attendance System
+
+	%% External Entities
+	Admin[Admin]
+	Student[Student]
+	Teacher[Teacher]
+	Camera[Camera / Biometric Device]
+	Notify[Notification Service]
+
+	%% Subprocesses
+	P1((1.0 Admin Authentication))
+	P2((2.0 User & Academic Data Management))
+	P3((3.0 Face Capture & Identity Verification))
+	P4((4.0 Attendance Recording & Status Update))
+	P5((5.0 Attendance Query / Reporting / Export))
+	P6((6.0 Notification & Recent Activity))
+
+	%% Data Stores
+	D1[(D1 User Master Store\nStudents + Teachers)]
+	D2[(D2 Attendance Store\nStudent + Teacher Attendance)]
+	D3[(D3 Academic Structure Store\nDepartments + Batches + Class Groups)]
+	D4[(D4 Admin Security Store\nPIN Hash + Admin Tokens)]
+	D5[(D5 Face/Media Store\nImages + Encodings + QR + Snapshots)]
+
+	%% Admin Authentication Flows
+	Admin -->|Admin PIN Credentials| P1
+	P1 -->|Auth Token Access Result| Admin
+	P1 -->|Store and Rotate Admin Token| D4
+	D4 -->|PIN Hash and Token Validation Data| P1
+
+	%% User & Academic Data Management Flows
+	Admin -->|Student Teacher CRUD Data| P2
+	Admin -->|Department Batch ClassGroup CRUD Data| P2
+	P2 -->|Create Update Delete Result| Admin
+	P2 -->|User Profile Records| D1
+	D1 -->|Existing User Data| P2
+	P2 -->|Class Structure Records| D3
+	D3 -->|Department Batch ClassGroup Data| P2
+	P2 -->|Uploaded Profile Images Generated QR and Encodings| D5
+
+	%% Face Capture & Identity Verification Flows
+	Camera -->|Live Face Frames| P3
+	Student -->|Manual Roll Input and Face Attempt| P3
+	Teacher -->|Employee ID Input and Face Attempt| P3
+	P3 -->|Attendance Scan Feedback| Camera
+	D1 -->|Stored Face Encodings and User Identity Data| P3
+	D5 -->|Reference Images and Encoding Artifacts| P3
+	P3 -->|Validated Identity Match Score and Timestamp| P4
+	P3 -->|No Match No Face Event| P6
+
+	%% Attendance Recording Flows
+	P4 -->|Attendance Record On Time Late Absent| D2
+	D2 -->|Duplicate Check and Existing Attendance| P4
+	P4 -->|Attendance Snapshot| D5
+	P4 -->|Attendance Confirmation and Status| Student
+	P4 -->|Attendance Confirmation and Status| Teacher
+	P4 -->|Attendance Event| P6
+
+	%% Reporting & Query Flows
+	Admin -->|Status History Report Export Request| P5
+	P5 -->|Attendance Reports Excel Export and KPIs| Admin
+	D2 -->|Attendance History Data| P5
+	D1 -->|Student Teacher Profile Data| P5
+	D3 -->|Class Department Context Data| P5
+
+	%% Notification & Activity Flows
+	P6 -->|Recent Attendance Feed and Alert Summary| Admin
+	P6 -->|Absence Attendance Notification Payload| Notify
+	Notify -->|Delivery Status and Error Details| P6
+
+	classDef external fill:#ffffff,stroke:#333,stroke-width:1px,color:#111;
+	classDef process fill:#e6f0ff,stroke:#1d4ed8,stroke-width:1.5px,color:#111;
+	classDef store fill:#fff7e6,stroke:#b45309,stroke-width:1px,color:#111;
+
+	class Admin,Student,Teacher,Camera,Notify external;
+	class P1,P2,P3,P4,P5,P6 process;
+	class D1,D2,D3,D4,D5 store;

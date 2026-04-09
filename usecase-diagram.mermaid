@@ -1,0 +1,98 @@
+flowchart LR
+  %% Smart Attendance System - Use Case Diagram
+  %% Layout inspired by the sample image: actors outside, use-cases centered
+
+  subgraph LEFT[ ]
+    direction TB
+    Student[Student]
+    Teacher[Teacher]
+  end
+
+  subgraph SAS[Smart Attendance System]
+    direction TB
+
+    UC_Mark([Mark Attendance via Face Scan])
+    UC_Manual([Enter Roll Number Manually])
+    UC_Recent([View Recent Attendance Events])
+
+    UC_Login([Authenticate Admin PIN])
+    UC_Validate([Validate Admin Session Token])
+    UC_ChangePin([Change Admin PIN])
+
+    UC_ViewDash([View Admin Dashboard])
+    UC_ViewStatus([View Attendance Status List])
+    UC_Filter([Filter and Search Attendance Data])
+    UC_MostAbsent([View Most Absent Report])
+    UC_ExportExcel([Export Attendance to Excel])
+
+    UC_ViewStudents([View Students List])
+    UC_AddStudent([Add Student])
+    UC_EditStudent([Edit Student Profile])
+    UC_ViewStudentDetail([View Student Detail])
+    UC_ViewStudentHistory([View Student Attendance History])
+    UC_EditAttendance([Edit Attendance Record])
+
+    UC_ManageTeacher([Manage Teachers])
+    UC_ManageDept([Manage Departments])
+    UC_ManageBatch([Manage Batches])
+    UC_ManageClass([Manage Class Groups])
+
+    UC_NoDup([Prevent Duplicate Daily Attendance])
+    UC_SaveImg([Store Attendance Snapshot])
+  end
+
+  subgraph RIGHT[ ]
+    direction TB
+    Admin[Admin]
+  end
+
+  %% Student and Teacher interactions
+  Student --> UC_Mark
+  Student --> UC_Manual
+  Student --> UC_Recent
+
+  Teacher --> UC_Mark
+
+  %% Admin interactions
+  Admin --> UC_Login
+  Admin --> UC_ChangePin
+  Admin --> UC_ViewDash
+  Admin --> UC_ViewStatus
+  Admin --> UC_Filter
+  Admin --> UC_MostAbsent
+  Admin --> UC_ExportExcel
+
+  Admin --> UC_ViewStudents
+  Admin --> UC_AddStudent
+  Admin --> UC_EditStudent
+  Admin --> UC_ViewStudentDetail
+  Admin --> UC_ViewStudentHistory
+  Admin --> UC_EditAttendance
+
+  Admin --> UC_ManageTeacher
+  Admin --> UC_ManageDept
+  Admin --> UC_ManageBatch
+  Admin --> UC_ManageClass
+  Admin --> UC_Recent
+
+  %% Internal include-like relationships
+  UC_Login --> UC_Validate
+  UC_Mark --> UC_NoDup
+  UC_Mark --> UC_SaveImg
+
+  UC_ViewDash --> UC_ViewStatus
+  UC_ViewDash --> UC_Filter
+
+  UC_ViewStudentDetail --> UC_ViewStudentHistory
+  UC_ViewStudentDetail --> UC_EditAttendance
+
+  UC_AddStudent --> UC_ManageDept
+  UC_AddStudent --> UC_ManageBatch
+  UC_AddStudent --> UC_ManageClass
+
+  %% Styling
+  classDef actor fill:#f8fafc,stroke:#64748b,stroke-width:1px,color:#0f172a;
+  classDef usecase fill:#ffffff,stroke:#0f172a,stroke-width:1px,color:#0f172a;
+
+  class Student,Teacher,Admin actor;
+  class UC_Mark,UC_Manual,UC_Recent,UC_Login,UC_Validate,UC_ChangePin,UC_ViewDash,UC_ViewStatus,UC_Filter,UC_MostAbsent,UC_ExportExcel,UC_ViewStudents,UC_AddStudent,UC_EditStudent,UC_ViewStudentDetail,UC_ViewStudentHistory,UC_EditAttendance,UC_ManageTeacher,UC_ManageDept,UC_ManageBatch,UC_ManageClass,UC_NoDup,UC_SaveImg usecase;
