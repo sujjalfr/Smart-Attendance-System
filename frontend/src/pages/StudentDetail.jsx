@@ -55,6 +55,21 @@ function computeStatusFromTime(hhmm) {
   return "late";
 }
 
+// Small presentational badge used across the page for attendance status
+function StatusBadge({ status }) {
+  const s = String(status || "").toLowerCase();
+  const label = (s || "absent").replace("_", " ").toUpperCase();
+  // Use a subtle neutral style (no strong colours / borders)
+  const cls = "bg-gray-50 text-gray-800";
+  return (
+    <span
+      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function StudentDetail() {
   const { rollNo } = useParams();
   const navigate = useNavigate();
@@ -624,7 +639,7 @@ export default function StudentDetail() {
                       <button
                         type="button"
                         onClick={() => openLightbox(imageUrl)}
-                        className="rounded-lg overflow-hidden p-0 bg-transparent border-0"
+                        className="rounded-lg overflow-hidden p-0 bg-transparent"
                         title="Open profile image"
                       >
                         <img
@@ -658,7 +673,7 @@ export default function StudentDetail() {
                             openLightbox(src);
                           }}
                           title="Open QR code"
-                          className="flex-shrink-0 p-0 bg-transparent border-0"
+                          className="shrink-0 p-0 bg-transparent"
                         >
                           <img
                             src={
@@ -670,7 +685,7 @@ export default function StudentDetail() {
                                   : `${API_BASE}/media/${student.qr_code}`
                             }
                             alt="QR"
-                            className="w-20 h-20 object-contain bg-white border rounded p-1"
+                                  className="w-20 h-20 object-contain bg-white rounded p-1 shadow-sm"
                             onError={(e) => {
                               // hide QR image if it fails to load
                               if (e && e.target && e.target.style) {
@@ -737,7 +752,7 @@ export default function StudentDetail() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="p-3 border rounded">
+                      <div className="p-3 rounded bg-white shadow-sm">
                         <label className="text-xs text-gray-500 block mb-1">
                           Department
                         </label>
@@ -762,7 +777,7 @@ export default function StudentDetail() {
                         </select>
                       </div>
 
-                      <div className="p-3 border rounded">
+                      <div className="p-3 rounded bg-white shadow-sm">
                         <label className="text-xs text-gray-500 block mb-1">
                           Batch
                         </label>
@@ -786,7 +801,7 @@ export default function StudentDetail() {
                         </select>
                       </div>
 
-                      <div className="p-3 border rounded">
+                      <div className="p-3 rounded bg-white shadow-sm">
                         <label className="text-xs text-gray-500 block mb-1">
                           Class Group
                         </label>
@@ -809,31 +824,31 @@ export default function StudentDetail() {
                       </div>
                     </div>
 
-                    <div className="p-3 border rounded">
+                    <div className="p-3 rounded bg-white shadow-sm">
                       <label className="text-sm text-gray-500 block mb-2">
                         Today's Attendance Status
                       </label>
                       {!isEditing && attendance ? (
-                        <div className="text-sm space-y-1">
-                          <div>
-                            Status:{" "}
-                            <span className="font-medium">
-                              {attendance.status}
-                            </span>
-                          </div>
-                          <div>
-                            Time:{" "}
-                            <span className="font-mono">
+                        <div className="text-sm space-y-2">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <StatusBadge status={attendance.status} />
+                            </div>
+                            <div className="text-xs text-gray-500">Time</div>
+                            <div className="font-mono">
                               {attendance.time
                                 ? formatTimeForDisplay(attendance.time)
                                 : "—"}
-                            </span>
+                            </div>
                           </div>
-                          <div>
-                            Already Marked:{" "}
+                          <div className="text-sm">
+                            <strong className="text-xs text-gray-500 mr-1">Already Marked:</strong>
                             {attendance.alreadyMarked ? "Yes" : "No"}
                           </div>
-                          <div>Class: {attendance.class || "—"}</div>
+                          <div className="text-sm">
+                            <strong className="text-xs text-gray-500 mr-1">Class:</strong>
+                            {attendance.class || "—"}
+                          </div>
                         </div>
                       ) : !isEditing ? (
                         <div className="text-sm text-gray-500">
@@ -904,41 +919,39 @@ export default function StudentDetail() {
                 ) : attendanceDetails ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="p-3 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm">
                         <div className="text-xs text-gray-600">Total Days</div>
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-2xl font-bold text-gray-900">
                           {attendanceDetails.total_days}
                         </div>
                       </div>
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="text-xs text-gray-600">
-                          Days Present
-                        </div>
-                        <div className="text-2xl font-bold text-green-600">
+                      <div className="p-3 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm">
+                        <div className="text-xs text-gray-600">Days Present</div>
+                        <div className="text-2xl font-bold text-gray-900">
                           {attendanceDetails.present_days}
                         </div>
                       </div>
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="p-3 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm">
                         <div className="text-xs text-gray-600">Days Absent</div>
-                        <div className="text-2xl font-bold text-red-600">
+                        <div className="text-2xl font-bold text-gray-900">
                           {attendanceDetails.absent_days}
                         </div>
                       </div>
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <div className="p-3 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm">
                         <div className="text-xs text-gray-600">On Time</div>
-                        <div className="text-2xl font-bold text-emerald-600">
+                        <div className="text-2xl font-bold text-gray-900">
                           {attendanceDetails.on_time_days}
                         </div>
                       </div>
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="p-3 rounded-lg flex flex-col items-center justify-center bg-white shadow-sm">
                         <div className="text-xs text-gray-600">Late</div>
-                        <div className="text-2xl font-bold text-yellow-600">
+                        <div className="text-2xl font-bold text-gray-900">
                           {attendanceDetails.late_days}
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-gray-50 rounded-lg border">
+                    <div className="p-4 bg-white rounded-lg shadow-sm">
                       <div className="text-sm font-semibold mb-3">
                         Filter by Date Range
                       </div>
@@ -984,10 +997,10 @@ export default function StudentDetail() {
                         Attendance Records (
                         {attendanceDetails.records?.length || 0})
                       </div>
-                      <div className="overflow-x-auto border rounded-lg">
+                      <div className="overflow-x-auto rounded-lg shadow-sm">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-100 border-b">
+                            <tr className="bg-gray-50">
                               <th className="px-4 py-3 text-left font-semibold">
                                 Date
                               </th>
@@ -1013,10 +1026,10 @@ export default function StudentDetail() {
                                 const isThisEditing =
                                   String(rid) === String(editingAttendanceId);
                                 return (
-                                  <tr
-                                    key={idx}
-                                    className="border-b hover:bg-gray-50 transition"
-                                  >
+                                      <tr
+                                            key={idx}
+                                            className="hover:bg-gray-50 transition"
+                                          >
                                     <td className="px-4 py-3">
                                       {formatDate(record.date)}
                                     </td>
@@ -1077,19 +1090,7 @@ export default function StudentDetail() {
                                       )}
                                     </td>
                                     <td className="px-4 py-3">
-                                      <span
-                                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                          record.status === "on_time"
-                                            ? "bg-green-100 text-green-800"
-                                            : record.status === "late"
-                                              ? "bg-yellow-100 text-yellow-800"
-                                              : "bg-red-100 text-red-800"
-                                        }`}
-                                      >
-                                        {String(record.status || "")
-                                          .replace("_", " ")
-                                          .toUpperCase()}
-                                      </span>
+                                      <StatusBadge status={record.status} />
                                     </td>
                                     <td className="px-4 py-3">
                                       {!isThisEditing && (
@@ -1108,12 +1109,18 @@ export default function StudentDetail() {
                               })
                             ) : (
                               <tr>
-                                <td
-                                  colSpan="4"
-                                  className="px-4 py-6 text-center text-gray-500"
-                                >
-                                  No attendance records found for the selected
-                                  date range.
+                                <td colSpan="4" className="px-4 py-6">
+                                  <div className="max-w-md mx-auto bg-white rounded-lg p-6 text-center shadow-sm">
+                                    <div className="text-gray-400 text-3xl mb-2">—</div>
+                                    <div className="text-sm text-gray-600">
+                                      No attendance records found for the
+                                      selected date range.
+                                    </div>
+                                    <div className="text-xs text-gray-400 mt-3">
+                                      Try clearing the filters or check another
+                                      date range.
+                                    </div>
+                                  </div>
                                 </td>
                               </tr>
                             )}
@@ -1123,7 +1130,7 @@ export default function StudentDetail() {
                     </div>
 
                     {attendanceDetails.total_days > 0 && (
-                      <div className="p-4 bg-gray-50 rounded-lg border">
+                      <div className="p-4 bg-white rounded-lg shadow-sm">
                         <div className="text-sm font-semibold mb-2">
                           Attendance Percentage
                         </div>

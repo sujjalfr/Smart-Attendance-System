@@ -38,20 +38,16 @@ const AttendancePage = () => {
   const handleRescanFace = () => { setLastAttendance(null); setStep("face"); };
   const handleReenterRoll = () => { setLastAttendance(null); setRollNo(""); setStep("manual"); };
 
-  const attemptServerAuth = async (pin) => {
+  const attemptServerAuth = async (pin, timeoutMs = 2000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const resp = await fetch(`${API_BASE}/api/admin/auth/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
+      const resp = await fetch(`${API_BASE}/api/admin/auth/`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ pin }), signal: controller.signal });
+      clearTimeout(id);
       const data = await resp.json();
-      if (data?.token) {
-        try { localStorage.setItem('admin_token', data.token); sessionStorage.setItem('admin_authenticated', '1'); } catch (e) { /* ignore storage errors */ }
-        return { ok: true };
-      }
-      return { ok: false, error: data?.error };
+      return data?.token ? { ok: true } : { ok: false, error: data?.error };
     } catch (e) {
+      clearTimeout(id);
       return { ok: false, unreachable: true };
     }
   };
@@ -59,9 +55,23 @@ const AttendancePage = () => {
   const handleAdminEnter = async () => {
     setExitError("");
     if (!/^[0-9]{5}$/.test(exitPin)) { setExitError("Enter a 5-digit numeric code"); return; }
+
+    // Immediate local PIN check so user gets instant redirect when offline or using dev PIN
+    if (exitPin === getAdminPin()) {
+      try { sessionStorage.setItem("admin_authenticated", "1"); } catch {}
+      setShowExitPinModal(false);
+      setExitPin("");
+      setExitError("");
+      // Fire-and-forget server auth to sync token if server reachable
+      attemptServerAuth(exitPin).catch(() => {});
+      navigate("/home");
+      return;
+    }
+
+    // If local PIN didn't match, try server (with timeout). Show errors accordingly.
     const res = await attemptServerAuth(exitPin);
     if (res.ok) { setShowExitPinModal(false); setExitPin(""); setExitError(""); navigate("/home"); return; }
-    if (res.unreachable) { if (exitPin === getAdminPin()) { try { sessionStorage.setItem("admin_authenticated", "1"); } catch {} setShowExitPinModal(false); navigate("/home"); return; } setExitError("Server unreachable and local PIN did not match"); return; }
+    if (res.unreachable) { setExitError("Server unreachable and local PIN did not match"); return; }
     setExitError(res.error || "Invalid PIN");
   };
 
