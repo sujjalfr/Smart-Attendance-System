@@ -29,6 +29,8 @@ from collections import deque
 
 # In-memory recent attendance events (most recent first)
 RECENT_ATTENDANCE = deque(maxlen=8)
+# In-memory admin email job logs (most recent first)
+ADMIN_EMAIL_LOGS = deque(maxlen=50)
 # Matching configuration: slightly relaxed threshold to reduce false negatives
 # Increase threshold from 0.5 -> 0.6 to accept borderline but valid matches.
 STRICT_MATCH_THRESHOLD = 0.6  # maximum allowed distance for an automatic match
@@ -210,17 +212,12 @@ class MarkAttendance(APIView):
         try:
             today = timezone.now().date()
             excluded_student_ids = list(Attendance.objects.filter(date=today).values_list('student_id', flat=True))
-            # If all students are already marked today, skip matching early
-            total_students = Student.objects.count()
-            if excluded_student_ids and len(excluded_student_ids) >= total_students:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                except Exception:
-                    pass
-                return Response({"error": "All matched candidates already marked"}, status=200)
-
-            candidates = match_face(path, exclude_student_ids=excluded_student_ids)
+            # Do not short-circuit when all students are marked: teachers are separate
+            # and should still be matched. Pass the list of excluded student ids to
+            # `match_face` so already-marked students are skipped, but allow teachers
+            # to be considered.
+            # run face matching with a bounded timeout to avoid blocking the server
+            candidates = match_face(path, exclude_student_ids=excluded_student_ids, timeout=7)
             print(f"Match result: {candidates}")
             if candidates == "no_face":
                 print("Error: No face detected in image")
@@ -288,8 +285,17 @@ class MarkAttendance(APIView):
                     close_candidates = [c for c in candidates if abs(c[1] - top_dist) <= close_eps]
                     chosen_student = None
                     chosen_distance = None
+                    from accounts.models import Teacher as _Teacher
                     for (cand_student, cand_dist) in close_candidates:
-                        existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                        # Check existing attendance based on candidate type
+                        existing_att = None
+                        try:
+                            if isinstance(cand_student, Student):
+                                existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                            elif isinstance(cand_student, _Teacher):
+                                existing_att = TeacherAttendance.objects.filter(teacher=cand_student, date=today).first()
+                        except Exception:
+                            existing_att = None
                         if not existing_att:
                             chosen_student = cand_student
                             chosen_distance = cand_dist
@@ -313,7 +319,9 @@ class MarkAttendance(APIView):
                     student = chosen_student
                     chosen_distance = chosen_distance
                     if ambiguous_fallback:
-                        print(f"Ambiguous match resolved by deterministic fallback: selected {student.roll_no} (distance={chosen_distance})")
+                        # Safe debug printing for student/teacher
+                        ident = getattr(student, 'roll_no', None) or getattr(student, 'employee_id', None) or str(getattr(student, 'id', 'unknown'))
+                        print(f"Ambiguous match resolved by deterministic fallback: selected {ident} (distance={chosen_distance})")
                 else:
                     try:
                         if os.path.exists(path):
@@ -346,7 +354,16 @@ class MarkAttendance(APIView):
                     continue
                 found_candidate_within_threshold = True
                 today = timezone.now().date()
-                existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                # Check existing attendance depending on candidate type
+                existing_att = None
+                try:
+                    from accounts.models import Teacher as _Teacher
+                    if isinstance(cand_student, Student):
+                        existing_att = Attendance.objects.filter(student=cand_student, date=today).first()
+                    elif isinstance(cand_student, _Teacher):
+                        existing_att = TeacherAttendance.objects.filter(teacher=cand_student, date=today).first()
+                except Exception:
+                    existing_att = None
                 if existing_att:
                     # already marked, try next-best candidate
                     continue
@@ -893,6 +910,14 @@ class AdminSendEmailAPIView(APIView):
                 for s in qs:
                     if s.email:
                         recipients.append((s.email, s))
+            elif filter_type == "teachers":
+                # Support sending to selected teachers (frontend may provide teacher_ids)
+                tids = data.get('teacher_ids', []) or []
+                from accounts.models import Teacher as TeacherModel
+                qs = TeacherModel.objects.filter(id__in=tids)
+                for t in qs:
+                    if t.email:
+                        recipients.append((t.email, t))
             else:
                 return Response({"error": "Unknown filter type"}, status=400)
         except Exception as e:
@@ -903,8 +928,9 @@ class AdminSendEmailAPIView(APIView):
         if not emails:
             return Response({"sent": 0, "queued": 0, "message": "No recipients found"})
 
-        def _send_all(to_list):
+        def _send_all(to_list, job):
             sent = 0
+            failures = []
             for (addr, stud) in to_list:
                 try:
                     # personalize message via template if needed
@@ -926,12 +952,45 @@ class AdminSendEmailAPIView(APIView):
                     sent += 1
                 except Exception as e:
                     logger.exception('Failed to send admin email to %s: %s', addr, e)
+                    failures.append({"email": addr, "error": str(e)})
+
+            job_result = {
+                "queued": len(to_list),
+                "attempted": len(to_list),
+                "sent": sent,
+                "failures": failures,
+                "subject": subject,
+                "timestamp": timezone.now().isoformat(),
+            }
+            # update job record in ADMIN_EMAIL_LOGS (job is a dict reference)
+            try:
+                job.update({"status": "done", "result": job_result})
+            except Exception:
+                pass
             logger.info('Admin bulk email: attempted %d, sent %d', len(to_list), sent)
 
-        # send in background thread so admin UI doesn't block
-        threading.Thread(target=_send_all, args=(recipients,)).start()
+        # create a job record and store in in-memory logs
+        job_id = secrets.token_hex(8)
+        job = {"id": job_id, "status": "queued", "subject": subject, "queued": len(recipients), "timestamp": timezone.now().isoformat()}
+        ADMIN_EMAIL_LOGS.appendleft(job)
 
-        return Response({"queued": len(recipients), "message": "Emails are being sent in background"}, status=202)
+        # send in background thread so admin UI doesn't block
+        threading.Thread(target=_send_all, args=(recipients, job)).start()
+
+        return Response({"job_id": job_id, "queued": len(recipients), "message": "Emails are being sent in background"}, status=202)
+
+
+class AdminSendEmailStatusAPIView(APIView):
+    """GET /api/admin/send-email/status/<job_id>/  Returns job status/result from in-memory logs."""
+    def get(self, request, job_id=None):
+        try:
+            for j in ADMIN_EMAIL_LOGS:
+                if j.get('id') == job_id:
+                    return Response(j)
+            return Response({"error": "Job not found"}, status=404)
+        except Exception as e:
+            logger.exception('Failed to fetch email job status: %s', e)
+            return Response({"error": "Failed to fetch job status"}, status=500)
 
 class AdminPinAPIView(APIView):
     """

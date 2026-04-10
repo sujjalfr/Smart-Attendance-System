@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import ChainedSelects from "./ChainedSelects";
+import Sidebar from "../Sidebar";
+// import Sidebar from "../../components/Admin/Sidebar";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
 export default function AddStudent() {
-  const [form, setForm] = useState({ name: "", roll_no: "" });
+  const [form, setForm] = useState({ name: "", roll_no: "", email: "" });
   const [deptBatchClass, setDeptBatchClass] = useState({
     deptId: "",
     batchId: "",
@@ -19,6 +21,8 @@ export default function AddStudent() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const navigate = useNavigate();
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleChainedChange = useCallback((vals) => setDeptBatchClass(vals), []);
 
@@ -104,6 +108,12 @@ export default function AddStudent() {
       return;
     }
 
+    // Client-side email sanity check
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+      setMsg("Invalid email address format");
+      return;
+    }
+
     // If only classGroupId selected, try to auto-fill department_id & batch_id
     let deptIdToSend = deptBatchClass.deptId;
     let batchIdToSend = deptBatchClass.batchId;
@@ -126,6 +136,7 @@ export default function AddStudent() {
     const fd = new FormData();
     fd.append("name", form.name);
     fd.append("roll_no", form.roll_no);
+    if (form.email) fd.append("email", form.email);
     // backend serializer expects department_id / batch_id / class_group_id
     if (deptIdToSend) fd.append("department_id", deptIdToSend);
     if (batchIdToSend) fd.append("batch_id", batchIdToSend);
@@ -146,16 +157,35 @@ export default function AddStudent() {
       navigate(`/admin/student/${roll}`);
     } catch (err) {
       console.error("Add student failed", err);
-      const em = err?.response?.data?.detail || err?.response?.data || err.message;
+      const resp = err?.response?.data;
+      let em = err?.message || "Failed to add student";
+      if (resp) {
+        // Format DRF validation errors
+        if (typeof resp === 'string') em = resp;
+        else if (resp.detail) em = resp.detail;
+        else if (typeof resp === 'object') {
+          try {
+            // join field errors
+            em = Object.entries(resp)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+              .join(' -- ');
+          } catch (e) {
+            em = JSON.stringify(resp);
+          }
+        }
+      }
       setMsg(String(em || "Failed to add student"));
     }
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-0 max-w-full mx-0 flex">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <div className="mb-4 py-5 px-10 ">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Add Student</h2>
-      </div>
+      </div> 
 
       <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 rounded shadow">
         <div>
@@ -175,6 +205,16 @@ export default function AddStudent() {
             value={form.roll_no}
             onChange={(e) => setForm((s) => ({ ...s, roll_no: e.target.value }))}
             required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm">Email</label>
+          <input
+            className="w-full border px-3 py-2 rounded"
+            value={form.email}
+            onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+            placeholder="student@example.com"
           />
         </div>
 
@@ -212,6 +252,7 @@ export default function AddStudent() {
           <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded">Save</button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

@@ -41,7 +41,7 @@ from attendance.views import (
     TeacherAttendanceStatus, TeacherAttendanceStatusList,
     TeacherAttendanceDetail, TeacherAttendanceUpdateAPIView,
     AdminAuthAPIView, AdminAuthValidateAPIView, AdminPinAPIView,
-    AdminPinResetAPIView, AdminSendEmailAPIView,
+    AdminPinResetAPIView, AdminSendEmailAPIView, AdminSendEmailStatusAPIView,
 )
 from attendance.views import RecentAttendanceAPIView
 
@@ -81,6 +81,7 @@ urlpatterns = [
     # DEBUG-only: reset admin PIN to default (remove in production)
     path('api/admin/pin/reset-default/', AdminPinResetAPIView.as_view()),
     path('api/admin/send-email/', AdminSendEmailAPIView.as_view()),
+    path('api/admin/send-email/status/<str:job_id>/', AdminSendEmailStatusAPIView.as_view()),
     path('api/attendance/most-absent/', MostAbsentAPIView.as_view()),
     path('api/attendance/recent/', RecentAttendanceAPIView.as_view()),
 ]

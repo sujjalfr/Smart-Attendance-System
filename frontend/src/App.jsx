@@ -6,8 +6,12 @@ import AttendancePage from './pages/AttendancePage'
 import HomePage from './pages/HomePage'
 import AdminDashboard  from './pages/AdminDashboard'
 import AdminStudentsPage from './pages/AdminStudents'
+import AdminTeachers from './pages/AdminTeachers'
+import AdminSendEmail from './pages/AdminSendEmail'
+import AdminAddTeacher from './pages/AdminAddTeacher'
 import AdminSettings from './pages/AdminSettings'
 import StudentDetail from './pages/StudentDetail'
+import TeacherDetail from './pages/TeacherDetail'
 import AddStudent from "./components/Admin/StudentManagement/AddStudent";
 import AdminLookups from "./pages/AdminLookups";
 
@@ -17,6 +21,7 @@ import RequireAdmin from "./components/Admin/RequireAdmin";
 function App() {
 
   return (
+    <div className="app-container">
     <Router>
          <Routes>
             <Route path="/" element={<AttendancePage />} />
@@ -38,9 +43,24 @@ function App() {
                 <AdminStudentsPage />
               </RequireAdmin>
             } />
+            <Route path="/admin/teachers" element={
+              <RequireAdmin>
+                <AdminTeachers />
+              </RequireAdmin>
+            } />
             <Route path="/admin/students/add" element={
               <RequireAdmin>
                 <AddStudent />
+              </RequireAdmin>
+            } />
+            <Route path="/admin/teachers/add" element={
+              <RequireAdmin>
+                <AdminAddTeacher />
+              </RequireAdmin>
+            } />
+            <Route path="/admin/send-email" element={
+              <RequireAdmin>
+                <AdminSendEmail />
               </RequireAdmin>
             } />
             <Route path="/admin/settings" element={
@@ -58,8 +78,14 @@ function App() {
                 <StudentDetail />
               </RequireAdmin>
             } />
+            <Route path="/admin/teacher/:employeeId" element={
+              <RequireAdmin>
+                <TeacherDetail />
+              </RequireAdmin>
+            } />
          </Routes>
     </Router>
+    </div>
   )
 }
 

@@ -5,6 +5,9 @@ try:
     import cv2
 except Exception:
     cv2 = None
+import multiprocessing
+import logging
+logger = logging.getLogger(__name__)
 
 # Simple module-level cache for known encodings
 _ENCODINGS_CACHE = None
@@ -81,7 +84,7 @@ def get_face_encoding(image_path):
     return encoding.tobytes()
 
 
-def match_face(unknown_image_path, threshold=0.6, exclude_student_ids=None):
+def _match_face_raw(unknown_image_path, threshold=0.6, exclude_student_ids=None):
     """
     Match an unknown image against stored face encodings.
     Improvements:
@@ -245,8 +248,95 @@ def match_face(unknown_image_path, threshold=0.6, exclude_student_ids=None):
         return []
 
     candidates.sort(key=lambda t: t[1])
-    best_person, best_dist = candidates[0]
-    display_id = getattr(best_person, 'roll_no', getattr(best_person, 'employee_id', 'unknown'))
-    print(f"Best match: {display_id} with distance {best_dist}")
+
+    # Convert candidates to a serializable form: (label, pk, distance)
+    serial_candidates = []
+    for person, d in candidates:
+        try:
+            if hasattr(person, 'roll_no'):
+                label = 'student'
+                pk = person.pk
+            elif hasattr(person, 'employee_id'):
+                label = 'teacher'
+                pk = person.pk
+            else:
+                continue
+            serial_candidates.append((label, int(pk), float(d)))
+        except Exception:
+            continue
+
+    if not serial_candidates:
+        print("No serializable matching candidates found.")
+        return []
+
+    best_label, best_pk, best_dist = serial_candidates[0]
+    print(f"Best match: {best_label} id={best_pk} with distance {best_dist}")
+    return serial_candidates
+
+
+def match_face(unknown_image_path, threshold=0.6, exclude_student_ids=None, timeout=None):
+    """
+    Wrapper that optionally runs face matching in a separate process with a timeout.
+    Returns same formats as original `match_face`: "no_face", [] or list[(person_obj, distance), ...]
+    ``_match_face_raw`` returns serializable tuples (label, pk, distance) which we map
+    back to model instances here in the parent process.
+    """
+    from accounts.models import Student, Teacher
+
+    # If no timeout requested, run inline and map results
+    if not timeout:
+        raw = _match_face_raw(unknown_image_path, threshold=threshold, exclude_student_ids=exclude_student_ids)
+    else:
+        # Run in separate process to bound CPU/time usage. Use a Queue to receive result.
+        q = multiprocessing.Queue()
+
+        def _worker(path, thr, excl, out_q):
+            try:
+                res = _match_face_raw(path, threshold=thr, exclude_student_ids=excl)
+                out_q.put(('ok', res))
+            except Exception as e:
+                out_q.put(('err', str(e)))
+
+        p = multiprocessing.Process(target=_worker, args=(unknown_image_path, threshold, exclude_student_ids, q))
+        p.start()
+        try:
+            status, payload = q.get(timeout=timeout)
+        except Exception as e:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+            logger.warning('match_face timed out or failed to get result: %s', e)
+            return {'error': 'timeout'}
+        finally:
+            p.join(timeout=0.1)
+
+        if status != 'ok':
+            logger.warning('match_face worker returned error: %s', payload)
+            return []
+
+        raw = payload
+
+    # Map raw serializable results back to model instances
+    if raw == "no_face":
+        return "no_face"
+    if not raw:
+        return []
+
+    candidates = []
+    for (label, pk, dist) in raw:
+        try:
+            if label == 'student':
+                obj = Student.objects.filter(pk=pk).first()
+            elif label == 'teacher':
+                from accounts.models import Teacher as _T
+                obj = _T.objects.filter(pk=pk).first()
+            else:
+                obj = None
+            if obj is not None:
+                candidates.append((obj, float(dist)))
+        except Exception as e:
+            logger.exception('Failed mapping candidate to model: %s', e)
+            continue
 
     return candidates

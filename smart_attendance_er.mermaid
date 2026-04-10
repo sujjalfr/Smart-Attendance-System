@@ -1,97 +1,112 @@
 %% ============================================================
 %% Smart Attendance System - Complete ER Diagram (Backend Schema)
+%% Generated/updated to reflect `accounts` and `attendance` models
 %% Source: backend/smart_attendance/accounts/models.py
 %%         backend/smart_attendance/attendance/models.py
 %% ============================================================
 
 erDiagram
 
-	%% =========================
+	%% -------------------------
 	%% CORE ACADEMIC ENTITIES
-	%% =========================
+	%% -------------------------
 
 	DEPARTMENT {
 		int id PK "AutoField"
-		varchar_100 name "UNIQUE, NOT NULL"
+		varchar name "max=100, UNIQUE, NOT NULL"
 	}
 
 	BATCH {
 		int id PK "AutoField"
-		varchar_50 name "NOT NULL; e.g. batch2080"
-		int start_year "NULL"
+		varchar name "max=50, NOT NULL (e.g. batch2080)"
+		int start_year "NULLABLE"
 	}
 
 	CLASS_GROUP {
 		int id PK "AutoField"
-		varchar_50 name "NOT NULL; e.g. 10A or BCA-1"
+		varchar name "max=50, NOT NULL (e.g. 10A or BCA-1)"
 		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
 		int batch_id FK "NULL -> BATCH.id (SET_NULL)"
 	}
 
-	%% =========================
-	%% PEOPLE ENTITIES
-	%% =========================
+	%% -------------------------
+	%% PEOPLE / IDENTITY ENTITIES
+	%% -------------------------
 
 	STUDENT {
 		int id PK "AutoField"
-		varchar_20 roll_no "UNIQUE, NOT NULL"
-		varchar_100 name "NOT NULL"
-		email email "NULL, blank allowed"
+		varchar roll_no "max=20, UNIQUE, NOT NULL"
+		varchar name "max=100, NOT NULL"
+		varchar email "EmailField, NULLABLE"
 		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
 		int batch_id FK "NULL -> BATCH.id (SET_NULL)"
 		int class_group_id FK "NULL -> CLASS_GROUP.id (SET_NULL)"
-		binary face_encoding "NULL/blank; default=128-dim float64 zeros"
-		image image "NULL/blank; upload_to=students/"
-		image qr_code "NULL/blank; upload_to=qr_codes/; auto-generated from roll_no"
+		binary face_encoding "BinaryField, default=128-dim float64 zeros, NULLABLE"
+		image image "ImageField upload_to=students/, NULLABLE"
+		image qr_code "ImageField upload_to=qr_codes/, auto-generated from roll_no"
 		datetime created_at "auto_now_add"
 	}
 
 	TEACHER {
 		int id PK "AutoField"
-		varchar_30 employee_id "UNIQUE, NOT NULL"
-		varchar_100 name "NOT NULL"
-		email email "NULL, blank allowed"
+		varchar employee_id "max=30, UNIQUE, NOT NULL"
+		varchar name "max=100, NOT NULL"
+		varchar email "EmailField, NULLABLE"
+		varchar phone "max=32, NULLABLE"
 		int department_id FK "NULL -> DEPARTMENT.id (SET_NULL)"
-		binary face_encoding "NULL/blank; default=128-dim float64 zeros"
-		image image "NULL/blank; upload_to=teachers/"
+		binary face_encoding "BinaryField, default=128-dim float64 zeros, NULLABLE"
+		image image "ImageField upload_to=teachers/, NULLABLE"
 		datetime created_at "auto_now_add"
 	}
 
-	%% =========================
+	%% -------------------------
 	%% ATTENDANCE ENTITIES
-	%% =========================
+	%% -------------------------
 
 	ATTENDANCE {
 		int id PK "AutoField"
 		int student_id FK "NOT NULL -> STUDENT.id (CASCADE)"
-		date date "default=localdate"
-		time time "NULL/blank"
-		varchar_20 status "NOT NULL; choices: absent|on_time|late; default=absent"
+		date date "default=timezone.localdate"
+		time time "NULLABLE"
+		varchar status "choices: absent|on_time|late|leave; default=absent"
 		bool already_marked "default=false"
+		bool absent_email_sent "default=false"
 		datetime created_at "auto_now_add"
 		datetime updated_at "auto_now"
 		constraint uq_attendance_student_date "UNIQUE(student_id, date)"
 	}
 
-	%% =========================
+	TEACHER_ATTENDANCE {
+		int id PK "AutoField"
+		int teacher_id FK "NOT NULL -> TEACHER.id (CASCADE)"
+		date date "default=timezone.localdate"
+		time time "NULLABLE"
+		varchar status "choices: absent|on_time|late|leave; default=absent"
+		bool already_marked "default=false"
+		datetime created_at "auto_now_add"
+		datetime updated_at "auto_now"
+		constraint uq_teacher_attendance_teacher_date "UNIQUE(teacher_id, date)"
+	}
+
+	%% -------------------------
 	%% ADMIN / AUTH SUPPORT ENTITIES
-	%% =========================
+	%% -------------------------
 
 	ADMIN_SETTING {
 		int id PK "AutoField"
-		varchar_255 pin_hash "NULL/blank"
+		varchar pin_hash "max=255, NULLABLE (store hashed PIN)"
 		datetime updated_at "auto_now"
 	}
 
 	ADMIN_TOKEN {
 		int id PK "AutoField"
-		varchar_64 key "UNIQUE, NOT NULL"
-		datetime created_at "default=now"
+		varchar key "max=64, UNIQUE, NOT NULL"
+		datetime created_at "default=timezone.now"
 	}
 
-	%% =========================
+	%% -------------------------
 	%% RELATIONSHIPS (CARDINALITY)
-	%% =========================
+	%% -------------------------
 
 	DEPARTMENT ||--o{ CLASS_GROUP : "organizes"
 	BATCH ||--o{ CLASS_GROUP : "groups"
@@ -103,14 +118,18 @@ erDiagram
 	DEPARTMENT ||--o{ TEACHER : "contains"
 
 	STUDENT ||--o{ ATTENDANCE : "has daily records"
+	TEACHER ||--o{ TEACHER_ATTENDANCE : "has daily records"
 
-	%% =========================
+	%% -------------------------
 	%% IMPLEMENTATION NOTES
-	%% =========================
-	%% - Optional FKs in STUDENT / CLASS_GROUP / TEACHER use ON DELETE SET NULL.
-	%% - Attendance tables use ON DELETE CASCADE from parent person table.
-	%% - ATTENDANCE unique_together(student, date) ensures one row per student per day.
-	%% - ATTENDANCE has default ordering: -date, -time.
-	%% - ADMIN_SETTING acts as singleton-ish config table (application-level behavior).
-	%% - ADMIN_TOKEN expiry is enforced in app logic (not DB constraint).
+	%% -------------------------
+	%% - Optional FKs on STUDENT/CLASS_GROUP/TEACHER use ON DELETE SET NULL (models: SET_NULL).
+	%% - Attendance tables use ON DELETE CASCADE for their person FK (models: CASCADE).
+	%% - Unique constraints: (student, date) and (teacher, date) enforced via `unique_together`.
+	%% - Face encodings are stored as raw binary (`BinaryField`) containing 128 float64 values.
+	%% - QR codes are generated from `Student.roll_no` and saved to `qr_codes/`.
+	%% - `AdminSetting` behaves like a singleton config (application logic enforces single active config).
+	%% - `AdminToken` expiry is enforced in application code via `is_expired()` (not a DB constraint).
+	%% - `absent_email_sent` tracks whether an absent notification email was already sent for that record.
+
 
