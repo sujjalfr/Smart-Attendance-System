@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import { getStudents } from "../api/studentsCache";
 import Sidebar from "../components/Admin/Sidebar";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
@@ -133,27 +134,16 @@ export default function StudentDetail() {
       setLoading(true);
       setError("");
       try {
-        console.log(
-          `Fetching students from: ${API_BASE}/api/students/?page_size=1000`,
-        );
-        const [sr, ar] = await Promise.all([
-          axios.get(`${API_BASE}/api/students/?page_size=1000`),
+        console.log(`Fetching students from cache/api`);
+        const [students, ar] = await Promise.all([
+          getStudents(),
           axios.get(`${API_BASE}/api/attendanceStatus/list/`).catch((e) => {
             console.warn("AttendanceStatusList failed, continuing anyway:", e);
             return { data: { results: [] } };
           }),
         ]);
-
-        console.log("Students response:", sr.data);
-        console.log("Attendance response:", ar.data);
-
-        // Handle both paginated and non-paginated responses
-        const students = sr?.data?.results || sr?.data || [];
         console.log(`Total students fetched: ${students.length}`);
-        console.log(
-          "Student roll numbers:",
-          students.map((s) => s.roll_no),
-        );
+        console.log("Student roll numbers:", students.map((s) => s.roll_no));
 
         const found = students.find(
           (s) => String(s.roll_no).trim() === String(rollNo).trim(),
@@ -531,7 +521,7 @@ export default function StudentDetail() {
     <div className="flex">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 p-6 bg-gray-50 min-h-screen">
-        <div className="max-w-6xl mx-auto space-y-4">
+        <div className="max-w-full mx-0 space-y-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold">Student Detail</h1>
             <div className="flex gap-2">
@@ -595,7 +585,7 @@ export default function StudentDetail() {
                       navigate(`/admin/student/${String(inputRoll).trim()}`);
                     }
                   }}
-                  placeholder="e.g., 201, BIT-2081"
+                  placeholder="e.g., 201, BIT-20"
                   className="border px-3 py-2 rounded flex-1"
                 />
                 <button
@@ -753,74 +743,83 @@ export default function StudentDetail() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="p-3 rounded bg-white shadow-sm">
-                        <label className="text-xs text-gray-500 block mb-1">
-                          Department
-                        </label>
-                        <select
-                          className="text-sm border rounded px-2 py-1 w-full"
-                          value={deptId}
-                          onChange={(e) => {
-                            if (!isEditing) return;
-                            const val = e.target.value;
-                            setDeptId(val);
-                            setBatchId("");
-                            setClassGroupId("");
-                          }}
-                          disabled={!isEditing}
-                        >
-                          <option value="">Select department</option>
-                          {allDepartments.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.name}
-                            </option>
-                          ))}
-                        </select>
+                        <label className="text-xs text-gray-500 block mb-1">Department</label>
+                        {isEditing ? (
+                          <select
+                            className="text-sm border rounded px-2 py-1 w-full"
+                            value={deptId}
+                            onChange={(e) => {
+                              if (!isEditing) return;
+                              const val = e.target.value;
+                              setDeptId(val);
+                              setBatchId("");
+                              setClassGroupId("");
+                            }}
+                          >
+                            <option value="">Select department</option>
+                            {allDepartments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-sm text-gray-700">
+                            {student?.department?.name || (allDepartments.find((d) => String(d.id) === String(deptId))?.name) || "—"}
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-3 rounded bg-white shadow-sm">
-                        <label className="text-xs text-gray-500 block mb-1">
-                          Batch
-                        </label>
-                        <select
-                          className="text-sm border rounded px-2 py-1 w-full"
-                          value={batchId}
-                          onChange={(e) => {
-                            if (!isEditing) return;
-                            const val = e.target.value;
-                            setBatchId(val);
-                            setClassGroupId("");
-                          }}
-                          disabled={!isEditing}
-                        >
-                          <option value="">Select batch</option>
-                          {filteredBatches.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
+                        <label className="text-xs text-gray-500 block mb-1">Batch</label>
+                        {isEditing ? (
+                          <select
+                            className="text-sm border rounded px-2 py-1 w-full"
+                            value={batchId}
+                            onChange={(e) => {
+                              if (!isEditing) return;
+                              const val = e.target.value;
+                              setBatchId(val);
+                              setClassGroupId("");
+                            }}
+                          >
+                            <option value="">Select batch</option>
+                            {filteredBatches.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-sm text-gray-700">
+                            {student?.batch?.name || (allBatches.find((b) => String(b.id) === String(batchId))?.name) || "—"}
+                          </div>
+                        )}
                       </div>
 
                       <div className="p-3 rounded bg-white shadow-sm">
-                        <label className="text-xs text-gray-500 block mb-1">
-                          Class Group
-                        </label>
-                        <select
-                          className="text-sm border rounded px-2 py-1 w-full"
-                          value={classGroupId}
-                          onChange={(e) => {
-                            if (!isEditing) return;
-                            setClassGroupId(e.target.value);
-                          }}
-                          disabled={!isEditing}
-                        >
-                          <option value="">Select class group</option>
-                          {filteredClassGroups.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
+                        <label className="text-xs text-gray-500 block mb-1">Class Group</label>
+                        {isEditing ? (
+                          <select
+                            className="text-sm border rounded px-2 py-1 w-full"
+                            value={classGroupId}
+                            onChange={(e) => {
+                              if (!isEditing) return;
+                              setClassGroupId(e.target.value);
+                            }}
+                          >
+                            <option value="">Select class group</option>
+                            {filteredClassGroups.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-sm text-gray-700">
+                            {student?.class_group?.name || (allClassGroups.find((c) => String(c.id) === String(classGroupId))?.name) || "—"}
+                          </div>
+                        )}
                       </div>
                     </div>
 

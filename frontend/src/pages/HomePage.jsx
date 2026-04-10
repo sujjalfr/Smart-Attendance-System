@@ -3,6 +3,7 @@ import ChainedSelects from "../components/Admin/StudentManagement/ChainedSelects
 import Sidebar from "../components/Admin/Sidebar";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getStudents } from "../api/studentsCache";
 import { formatNPTOrDash, parseHourFromTimeString } from "../utils/helpers";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
@@ -118,21 +119,16 @@ function HomePage() {
   // Load students
   useEffect(() => {
     let mounted = true;
-    console.log(`Loading students from: ${API_BASE}/api/students/?page_size=1000`);
-    axios
-      .get(`${API_BASE}/api/students/?page_size=1000`)
-      .then((r) => {
+    (async () => {
+      try {
+        const data = await getStudents();
         if (!mounted) return;
-        console.log("Students loaded:", r.data);
-        const data = r.data.results || r.data || [];
-        setStudents(
-          (Array.isArray(data) ? data : []).map((d) => ({ ...d, id: String(d.id) })),
-        );
-      })
-      .catch((err) => {
-        console.error("Failed to load students:", err);
-        setStudents([]);
-      });
+        setStudents((Array.isArray(data) ? data : []).map((d) => ({ ...d, id: String(d.id) })));
+      } catch (err) {
+        console.error("Failed to load students (cache):", err);
+        if (mounted) setStudents([]);
+      }
+    })();
     return () => {
       mounted = false;
     };
@@ -230,9 +226,17 @@ function HomePage() {
   }, []);
 
   const filteredRows = useMemo(() => {
+    // Build a fast lookup map from roll_no -> student to avoid O(n^2) finds
+    const studentMap = new Map();
+    for (const st of students) {
+      try {
+        studentMap.set(String(st.roll_no), st);
+      } catch (e) {}
+    }
+
     return showAttendanceStatus
       .map((s) => {
-        const student = students.find((st) => st.roll_no === s.roll_no);
+        const student = studentMap.get(String(s.roll_no));
         return {
           ...s,
           displayName: student?.name || s.name || s.roll_no,

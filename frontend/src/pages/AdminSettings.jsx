@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../components/Admin/Sidebar";
 import axios from "axios";
+import ComposeEmailModal from "../components/Admin/ComposeEmailModal";
 
 export default function AdminSettings() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -14,6 +15,8 @@ export default function AdminSettings() {
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [pinMsg, setPinMsg] = useState("");
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPinEditor, setShowPinEditor] = useState(false);
   // focused field for keypad: "current" | "new" | "confirm"
   const [focusedPinField, setFocusedPinField] = useState("current");
 
@@ -71,7 +74,7 @@ export default function AdminSettings() {
     }
     try {
       const resp = await axios.post(
-        `${process.env.VITE_API_BASE || "http://127.0.0.1:8000"}/api/admin/pin/`,
+        `${import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000"}/api/admin/pin/`,
         {
           current_pin: currPin,
           pin: newPin,
@@ -82,7 +85,7 @@ export default function AdminSettings() {
         // fetch token after update to keep client authenticated
         try {
           const auth = await axios.post(
-            `${process.env.VITE_API_BASE || "http://127.0.0.1:8000"}/api/admin/auth/`,
+            `${import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000"}/api/admin/auth/`,
             { pin: newPin },
           );
           if (auth.data && auth.data.token) {
@@ -111,7 +114,7 @@ export default function AdminSettings() {
     <div className="flex">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 p-6">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-full mx-0">
           <h1 className="text-2xl font-semibold mb-4">Admin Settings</h1>
           {/* 
           <div className="bg-white p-4 rounded shadow space-y-4">
@@ -174,94 +177,110 @@ export default function AdminSettings() {
             <div className="text-sm text-gray-500 mb-3">
               Change the 5-digit admin PIN used to access admin pages.
             </div>
-            <div className="grid grid-cols-1 gap-2 mb-3">
-              {/* Masked displays (click to focus) */}
-              <div className="flex gap-2 items-center">
-                <div className="w-36">
-                  <div className="text-xs text-gray-600">Current PIN</div>
-                  <button
-                    type="button"
-                    onClick={() => setFocusedPinField("current")}
-                    className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "current" ? "ring-2 ring-blue-400" : ""}`}
-                  >
-                    {`${"•".repeat(currPin.length)}${"○".repeat(5 - currPin.length)}`}
-                  </button>
-                </div>
-                <div className="w-36">
-                  <div className="text-xs text-gray-600">New PIN</div>
-                  <button
-                    type="button"
-                    onClick={() => setFocusedPinField("new")}
-                    className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "new" ? "ring-2 ring-blue-400" : ""}`}
-                  >
-                    {`${"•".repeat(newPin.length)}${"○".repeat(5 - newPin.length)}`}
-                  </button>
-                </div>
-                <div className="w-36">
-                  <div className="text-xs text-gray-600">Confirm</div>
-                  <button
-                    type="button"
-                    onClick={() => setFocusedPinField("confirm")}
-                    className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "confirm" ? "ring-2 ring-blue-400" : ""}`}
-                  >
-                    {`${"•".repeat(confirmPin.length)}${"○".repeat(5 - confirmPin.length)}`}
-                  </button>
-                </div>
-              </div>
-
-              {/* Keypad */}
-              <div className="grid grid-cols-3 gap-2 justify-center">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => handleKeypad(d)}
-                    className="px-4 py-3 rounded border text-lg bg-gray-50"
-                  >
-                    {d}
-                  </button>
-                ))}
+            {!showPinEditor ? (
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-700">•••••</div>
                 <button
-                  onClick={handleClear}
-                  className="px-4 py-3 rounded border text-sm bg-yellow-50"
-                >
-                  Clear
-                </button>
-                <button
-                  onClick={() => handleKeypad("0")}
-                  className="px-4 py-3 rounded border text-lg bg-gray-50"
-                >
-                  0
-                </button>
-                <button
-                  onClick={handleBackspace}
-                  className="px-4 py-3 rounded border text-sm bg-yellow-50"
-                >
-                  ⌫
-                </button>
-              </div>
-              {pinMsg && (
-                <div className="text-sm text-red-600 mt-2">{pinMsg}</div>
-              )}
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setCurrPin("");
-                    setNewPin("");
-                    setConfirmPin("");
-                    setPinMsg("");
-                  }}
-                  className="px-3 py-1 border rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={changePin}
-                  disabled={!canSavePin}
-                  className={`px-3 py-1 rounded text-white ${canSavePin ? "bg-green-600" : "bg-gray-300 cursor-not-allowed"}`}
+                  onClick={() => setShowPinEditor(true)}
+                  className="px-3 py-2 bg-blue-600 text-white rounded"
                 >
                   Change PIN
                 </button>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 mb-3">
+                {/* Masked displays (click to focus) */}
+                <div className="flex gap-2 items-center">
+                  <div className="w-36">
+                    <div className="text-xs text-gray-600">Current PIN</div>
+                    <button
+                      type="button"
+                      onClick={() => setFocusedPinField("current")}
+                      className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "current" ? "ring-2 ring-blue-400" : ""}`}
+                    >
+                      {`${"•".repeat(currPin.length)}${"○".repeat(5 - currPin.length)}`}
+                    </button>
+                  </div>
+                  <div className="w-36">
+                    <div className="text-xs text-gray-600">New PIN</div>
+                    <button
+                      type="button"
+                      onClick={() => setFocusedPinField("new")}
+                      className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "new" ? "ring-2 ring-blue-400" : ""}`}
+                    >
+                      {`${"•".repeat(newPin.length)}${"○".repeat(5 - newPin.length)}`}
+                    </button>
+                  </div>
+                  <div className="w-36">
+                    <div className="text-xs text-gray-600">Confirm</div>
+                    <button
+                      type="button"
+                      onClick={() => setFocusedPinField("confirm")}
+                      className={`w-full text-center px-3 py-2 border rounded font-mono ${focusedPinField === "confirm" ? "ring-2 ring-blue-400" : ""}`}
+                    >
+                      {`${"•".repeat(confirmPin.length)}${"○".repeat(5 - confirmPin.length)}`}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Keypad */}
+                <div className="grid grid-cols-3 gap-2 justify-center">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => handleKeypad(d)}
+                      className="px-4 py-3 rounded border text-lg bg-gray-50"
+                    >
+                      {d}
+                    </button>
+                  ))}
+                  <button
+                    onClick={handleClear}
+                    className="px-4 py-3 rounded border text-sm bg-yellow-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => handleKeypad("0")}
+                    className="px-4 py-3 rounded border text-lg bg-gray-50"
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={handleBackspace}
+                    className="px-4 py-3 rounded border text-sm bg-yellow-50"
+                  >
+                    ⌫
+                  </button>
+                </div>
+                {pinMsg && (
+                  <div className="text-sm text-red-600 mt-2">{pinMsg}</div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrPin("");
+                      setNewPin("");
+                      setConfirmPin("");
+                      setPinMsg("");
+                      setShowPinEditor(false);
+                    }}
+                    className="px-3 py-1 border rounded"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={changePin}
+                    disabled={!canSavePin}
+                    className={`px-3 py-1 rounded text-white ${canSavePin ? "bg-green-600" : "bg-gray-300 cursor-not-allowed"}`}
+                  >
+                    Change PIN
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="mt-4">
+              <button onClick={() => window.location.href = '/admin/send-email'} className="px-3 py-2 bg-blue-600 text-white rounded">Compose & Send Email</button>
             </div>
           </div>
         </div>

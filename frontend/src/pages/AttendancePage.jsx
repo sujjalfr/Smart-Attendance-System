@@ -76,7 +76,7 @@ const AttendancePage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-start justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-start justify-start bg-gray-50 p-4">
       {showExitPinModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="bg-black/50 absolute inset-0" onClick={() => setShowExitPinModal(false)} />
@@ -98,21 +98,21 @@ const AttendancePage = () => {
         </div>
       )}
 
-      <div className="w-full max-w-8xl flex gap-4">
-        <div className="w-1/5 bg-white rounded-lg shadow p-3 flex flex-col gap-3">
+      <div className="w-full max-w-full flex gap-4">
+        <div className="w-1/5 card flex flex-col gap-3">
           <div className="flex justify-between items-center"><h3 className="font-semibold">Controls</h3><button onClick={() => setShowExitPinModal(true)} className="px-3 py-1 bg-red-500 text-white rounded">Exit</button></div>
           <button onClick={() => setAutoScan(p => !p)} className={`px-3 py-1 rounded text-sm font-bold ${autoScan ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>{autoScan ? 'Auto Scan: ON' : 'Auto Scan: OFF'}</button>
           <button onClick={() => { setRollNo(''); setStep('manual'); }} className="px-3 py-1 rounded text-sm bg-gray-200">Manual RollNo</button>
           {/* Removed redundant Stop AutoScan button - toggling Auto Scan is handled by the Auto Scan control above */}
           <div className="mt-auto text-sm text-gray-600">Tip: Place camera at eye level for best results.</div>
         </div>
-        <div className="w-3/5 bg-white rounded-lg shadow p-4 flex flex-col items-start">
+        <div className="w-3/5 card flex flex-col items-start">
           {step === 'manual' && <ManualRollInput onSubmit={handleManualSubmit} />}
           {(step === 'face' || autoScan) && <FaceScan onResult={handleFaceScanResult} autoScan={autoScan} showRecent={false} videoWidth={800} videoHeight={560} rollNo={rollNo} />}
           {lastAttendance && <div className={`mt-3 p-2 rounded text-sm ${lastAttendance.success ? 'bg-green-100' : 'bg-yellow-100'}`}>{lastAttendance.error ? <div>Result: {lastAttendance.error}</div> : <div>Attendance marked for {lastAttendance.name || ''} ({lastAttendance.rollNo || ''})</div>}</div>}
         </div>
 
-        <div className="w-1/5 bg-white rounded-lg shadow p-3 flex flex-col">
+        <div className="w-1/5 card flex flex-col">
           <h3 className="font-semibold mb-2">Recently Marked</h3>
           <div className="flex-1 overflow-y-auto space-y-2">
             {recentList && recentList.filter(r => r && r.startsWith && r.startsWith('Attendance marked')).length ? recentList.filter(r => r && r.startsWith && r.startsWith('Attendance marked')).map((item, idx) => (<div key={idx} className="p-1 border rounded bg-white shadow-sm"><div className="text-sm">{item}</div></div>)) : <div className="text-sm text-gray-500">No recent attendance</div>}

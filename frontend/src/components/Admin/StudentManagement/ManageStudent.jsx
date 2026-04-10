@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
+import { getStudents } from "../../../api/studentsCache";
 import { useNavigate } from "react-router-dom";
 import ChainedSelects from "./ChainedSelects";
 
@@ -21,21 +22,17 @@ export default function ManageStudent() {
     setLoading(true);
     setError("");
 
-    axios
-      .get(`${API_BASE}/api/students/?page_size=1000`)
-      .then((r) => {
+    (async () => {
+      try {
+        const studentsData = await getStudents();
         if (!mounted) return;
-        console.log("Students response:", r.data);
-
-        // Handle both paginated and non-paginated responses
-        const studentsData = r.data.results || r.data || [];
-        console.log(`Loaded ${Array.isArray(studentsData) ? studentsData.length : 0} students`);
+        console.log(`Loaded ${Array.isArray(studentsData) ? studentsData.length : 0} students (cache)`);
 
         const data = (Array.isArray(studentsData) ? studentsData : []).map((d) => {
           // Construct proper image URL
           let imageUrl = "https://i.pravatar.cc/40?img=1";
           if (d.image) {
-            if (d.image.startsWith('http')) {
+            if (d.image.startsWith && d.image.startsWith("http")) {
               imageUrl = d.image;
             } else {
               imageUrl = `${API_BASE}/media/${d.image}`;
@@ -46,9 +43,10 @@ export default function ManageStudent() {
             id: d.id,
             name: d.name,
             roll: d.roll_no,
-            batch: typeof d.batch === 'object' && d.batch ? d.batch.name : d.batch || "—",
-            department: typeof d.department === 'object' && d.department ? d.department.name : d.department || "—",
-            class: typeof d.class_group === 'object' && d.class_group ? d.class_group.name : d.class_group || "—",
+            batch: typeof d.batch === "object" && d.batch ? d.batch.name : d.batch || "—",
+            department:
+              typeof d.department === "object" && d.department ? d.department.name : d.department || "—",
+            class: typeof d.class_group === "object" && d.class_group ? d.class_group.name : d.class_group || "—",
             image: imageUrl,
             face_encoding: d.face_encoding,
             qr_code: d.qr_code,
@@ -58,19 +56,19 @@ export default function ManageStudent() {
             classGroupObj: d.class_group,
           };
         });
+
         setStudents(data);
         setError("");
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!mounted) return;
-        console.error("Failed to fetch students:", err);
+        console.error("Failed to fetch students (cache):", err);
         const errMsg = err?.response?.data?.error || err?.message || "Failed to load students. Please check server connection.";
         setError(errMsg);
         setStudents([]);
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       mounted = false;
@@ -121,7 +119,7 @@ export default function ManageStudent() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-full mx-0">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-semibold">Manage Students</h2>
         <div className="flex gap-2 items-center">

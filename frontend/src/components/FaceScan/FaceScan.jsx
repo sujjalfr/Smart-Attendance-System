@@ -65,22 +65,29 @@ const FaceScan = ({ onResult, autoScan = false, showRecent = true, videoWidth = 
       if (!imageSrc) return;
       processingRef.current = true;
       setLoading(true);
+      // keepLocked prevents releasing the processing lock immediately —
+      // used for successful autoScan cooldowns.
+      let keepLocked = false;
       try {
+        console.debug("FaceScan: captured screenshot, converting to blob");
         const blob = await (await fetch(imageSrc)).blob();
         const formData = new FormData();
         formData.append("image", blob, "face.jpg");
         // Include an optional roll number hint when provided (manual flow)
         if (rollNo) formData.append("roll_no", rollNo);
 
+        console.debug("FaceScan: sending attendance POST");
         const resp = await axios.post(
           `${API_BASE}/api/attendance/`,
           formData,
           {
             headers: { Accept: "application/json" },
             validateStatus: () => true, // handle non-2xx manually
+            timeout: 8000, // avoid indefinitely hanging requests
           },
         );
 
+        console.debug("FaceScan: received response", resp.status);
         const data = resp.data;
         if (resp.status < 200 || resp.status >= 300) {
           console.error("Attendance API error", resp.status, data);
@@ -92,7 +99,9 @@ const FaceScan = ({ onResult, autoScan = false, showRecent = true, videoWidth = 
             // For autoScan keep camera running; add a short cooldown to avoid duplicate marks
             if (autoScan) {
               lastSuccessRef.current = Date.now();
-              // keep processing locked for cooldown
+              // keep processing locked for cooldown — mark keepLocked so the finally
+              // block doesn't immediately release it.
+              keepLocked = true;
               setLoading(false);
               setTimeout(() => {
                 processingRef.current = false;
@@ -192,6 +201,13 @@ const FaceScan = ({ onResult, autoScan = false, showRecent = true, videoWidth = 
           onResult({ success: false, error: "Network error: " + err.message });
         } else {
           console.warn("FaceScan (auto) network error:", err);
+          processingRef.current = false;
+          setLoading(false);
+        }
+      } finally {
+        // Ensure we release processing lock unless an intentional autoScan cooldown
+        // requested to keep it locked via `keepLocked` above.
+        if (!keepLocked) {
           processingRef.current = false;
           setLoading(false);
         }

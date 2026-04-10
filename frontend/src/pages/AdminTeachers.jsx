@@ -1,8 +1,8 @@
 import React from "react";
 import Sidebar from "../components/Admin/Sidebar";
-import ManageStudent from "../components/Admin/StudentManagement/ManageStudent";
+import ManageTeacher from "../components/Admin/TeacherManagement/ManageTeacher";
 
-export default function AdminStudentsPage() {
+export default function AdminTeachers() {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
 
   return (
@@ -10,7 +10,7 @@ export default function AdminStudentsPage() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 p-6">
         <div className="max-w-full mx-0">
-          <ManageStudent />
+          <ManageTeacher />
         </div>
       </main>
     </div>

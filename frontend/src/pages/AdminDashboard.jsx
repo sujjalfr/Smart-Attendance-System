@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getStudents } from "../api/studentsCache";
 import Sidebar from "../components/Admin/Sidebar";
 import ChainedSelects from "../components/Admin/StudentManagement/ChainedSelects";
 import { formatNPTOrDash, parseHourFromTimeString } from "../utils/helpers";
@@ -205,21 +206,16 @@ export default function AdminDashboard() {
   // Load students
   useEffect(() => {
     let mounted = true;
-    console.log(`Loading students from: ${API_BASE}/api/students/?page_size=1000`);
-    axios
-      .get(`${API_BASE}/api/students/?page_size=1000`)
-      .then((r) => {
+    (async () => {
+      try {
+        const data = await getStudents();
         if (!mounted) return;
-        console.log("Students loaded:", r.data);
-        const data = r.data.results || r.data || [];
-        setStudents(
-          (Array.isArray(data) ? data : []).map((d) => ({ ...d, id: String(d.id) })),
-        );
-      })
-      .catch((err) => {
-        console.error("Failed to load students:", err);
-        setStudents([]);
-      });
+        setStudents((Array.isArray(data) ? data : []).map((d) => ({ ...d, id: String(d.id) })));
+      } catch (err) {
+        console.error("Failed to load students (cache):", err);
+        if (mounted) setStudents([]);
+      }
+    })();
     return () => {
       mounted = false;
     };
@@ -312,9 +308,17 @@ export default function AdminDashboard() {
   }, []);
 
   const filteredRows = useMemo(() => {
+    // Use a Map for O(1) student lookups
+    const studentMap = new Map();
+    for (const st of students) {
+      try {
+        studentMap.set(String(st.roll_no), st);
+      } catch (e) {}
+    }
+
     return attendance
       .map((s) => {
-        const student = students.find((st) => st.roll_no === s.roll_no);
+        const student = studentMap.get(String(s.roll_no));
         return {
           ...s,
           displayName: student?.name || s.name || s.roll_no,
