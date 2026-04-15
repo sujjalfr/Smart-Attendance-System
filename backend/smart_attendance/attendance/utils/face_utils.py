@@ -50,6 +50,12 @@ def _load_encodings_from_db(exclude_student_ids=None):
             continue
         if known_enc.shape[0] != 128:
             continue
+        # Skip default/empty encodings (all zeros)
+        try:
+            if np.all(known_enc == 0):
+                continue
+        except Exception:
+            pass
         persons.append((student, known_enc))
 
     try:
@@ -63,6 +69,12 @@ def _load_encodings_from_db(exclude_student_ids=None):
                 continue
             if known_enc.shape[0] != 128:
                 continue
+            # Skip default/empty encodings (all zeros)
+            try:
+                if np.all(known_enc == 0):
+                    continue
+            except Exception:
+                pass
             persons.append((teacher, known_enc))
     except Exception:
         pass
@@ -220,7 +232,7 @@ def _match_face_raw(unknown_image_path, threshold=0.6, exclude_student_ids=None)
             _ENCODINGS_CACHE_TS = now_ts
 
     if not persons:
-        print("No stored encodings available to compare.")
+        print("No stored encodings available to compare. (ensure students/teachers have valid encodings)")
         return []
 
     # Build arrays for vectorized distance computation

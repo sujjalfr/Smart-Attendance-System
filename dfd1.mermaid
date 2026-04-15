@@ -1,5 +1,7 @@
+
 flowchart LR
 	%% Level-1 DFD - Smart Attendance System
+	%% Updated: 2026-04-10 — cleaned labels and consistency
 
 	%% External Entities
 	Admin[Admin]
@@ -8,7 +10,7 @@ flowchart LR
 	Camera[Camera / Biometric Device]
 	Notify[Notification Service]
 
-	%% Subprocesses
+	%% Subprocesses (Level-1)
 	P1((1.0 Admin Authentication))
 	P2((2.0 User & Academic Data Management))
 	P3((3.0 Face Capture & Identity Verification))
@@ -26,48 +28,48 @@ flowchart LR
 	%% Admin Authentication Flows
 	Admin -->|Admin PIN Credentials| P1
 	P1 -->|Auth Token Access Result| Admin
-	P1 -->|Store and Rotate Admin Token| D4
-	D4 -->|PIN Hash and Token Validation Data| P1
+	P1 -->|Store / Rotate Admin Token| D4
+	D4 -->|PIN Hash & Token Validation Data| P1
 
 	%% User & Academic Data Management Flows
-	Admin -->|Student Teacher CRUD Data| P2
-	Admin -->|Department Batch ClassGroup CRUD Data| P2
-	P2 -->|Create Update Delete Result| Admin
+	Admin -->|Student / Teacher CRUD| P2
+	Admin -->|Department / Batch / ClassGroup CRUD| P2
+	P2 -->|Create / Update / Delete Result| Admin
 	P2 -->|User Profile Records| D1
 	D1 -->|Existing User Data| P2
 	P2 -->|Class Structure Records| D3
-	D3 -->|Department Batch ClassGroup Data| P2
-	P2 -->|Uploaded Profile Images Generated QR and Encodings| D5
+	D3 -->|Department / Batch / ClassGroup Data| P2
+	P2 -->|Uploaded Profile Images, QR & Encodings| D5
 
 	%% Face Capture & Identity Verification Flows
 	Camera -->|Live Face Frames| P3
-	Student -->|Manual Roll Input and Face Attempt| P3
-	Teacher -->|Employee ID Input and Face Attempt| P3
-	P3 -->|Attendance Scan Feedback| Camera
-	D1 -->|Stored Face Encodings and User Identity Data| P3
-	D5 -->|Reference Images and Encoding Artifacts| P3
-	P3 -->|Validated Identity Match Score and Timestamp| P4
-	P3 -->|No Match No Face Event| P6
+	Student -->|Manual Roll & Face Attempt| P3
+	Teacher -->|Employee ID & Face Attempt| P3
+	P3 -->|Capture / Scan Feedback| Camera
+	D1 -->|Stored Face Encodings & Identity Data| P3
+	D5 -->|Reference Images & Encodings| P3
+	P3 -->|Validated Match Score & Timestamp| P4
+	P3 -->|No Match / No Face Event| P6
 
 	%% Attendance Recording Flows
-	P4 -->|Attendance Record On Time Late Absent| D2
-	D2 -->|Duplicate Check and Existing Attendance| P4
+	P4 -->|Attendance Record — On-time, Late, Absent| D2
+	D2 -->|Duplicate Check & Existing Records| P4
 	P4 -->|Attendance Snapshot| D5
-	P4 -->|Attendance Confirmation and Status| Student
-	P4 -->|Attendance Confirmation and Status| Teacher
-	P4 -->|Attendance Event| P6
+	P4 -->|Attendance Confirmation| Student
+	P4 -->|Attendance Confirmation| Teacher
+	P4 -->|Attendance Event (for notifications)| P6
 
 	%% Reporting & Query Flows
-	Admin -->|Status History Report Export Request| P5
-	P5 -->|Attendance Reports Excel Export and KPIs| Admin
+	Admin -->|Status / History / Export Request| P5
+	P5 -->|Attendance Reports (Excel / KPIs)| Admin
 	D2 -->|Attendance History Data| P5
-	D1 -->|Student Teacher Profile Data| P5
-	D3 -->|Class Department Context Data| P5
+	D1 -->|Profile Data| P5
+	D3 -->|Class / Dept Context| P5
 
 	%% Notification & Activity Flows
-	P6 -->|Recent Attendance Feed and Alert Summary| Admin
-	P6 -->|Absence Attendance Notification Payload| Notify
-	Notify -->|Delivery Status and Error Details| P6
+	P6 -->|Recent Attendance Feed & Alerts| Admin
+	P6 -->|Absence / Attendance Notification Payload| Notify
+	Notify -->|Delivery Status & Error Details| P6
 
 	classDef external fill:#ffffff,stroke:#333,stroke-width:1px,color:#111;
 	classDef process fill:#e6f0ff,stroke:#1d4ed8,stroke-width:1.5px,color:#111;

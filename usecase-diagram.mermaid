@@ -1,7 +1,9 @@
 flowchart LR
-  %% Smart Attendance System - Use Case Diagram
-  %% Layout inspired by the sample image: actors outside, use-cases centered
+  %% Smart Attendance System - Use Case Diagram (expanded, repo-accurate)
+  %% Alt text: Actors (Student, Teacher, Admin) interact with the Smart Attendance System.
+  %% Key use cases: face-scan attendance, manual entry, admin dashboard & student management.
 
+  %% ACTORS (outside system boundary)
   subgraph LEFT[ ]
     direction TB
     Student[Student]
@@ -11,20 +13,26 @@ flowchart LR
   subgraph SAS[Smart Attendance System]
     direction TB
 
+    %% Student / Teacher features
+    %% Evidence: backend/smart_attendance/attendance/views.py : `class MarkAttendance`, `RECENT_ATTENDANCE`
     UC_Mark([Mark Attendance via Face Scan])
     UC_Manual([Enter Roll Number Manually])
     UC_Recent([View Recent Attendance Events])
 
+    %% Admin auth & session
+    %% Evidence: frontend/src/pages/AttendancePage.jsx (local PIN logic) and accounts.views._admin_token_valid
     UC_Login([Authenticate Admin PIN])
     UC_Validate([Validate Admin Session Token])
     UC_ChangePin([Change Admin PIN])
 
+    %% Admin dashboard, reports & export
     UC_ViewDash([View Admin Dashboard])
     UC_ViewStatus([View Attendance Status List])
     UC_Filter([Filter and Search Attendance Data])
     UC_MostAbsent([View Most Absent Report])
     UC_ExportExcel([Export Attendance to Excel])
 
+    %% Student management
     UC_ViewStudents([View Students List])
     UC_AddStudent([Add Student])
     UC_EditStudent([Edit Student Profile])
@@ -32,13 +40,17 @@ flowchart LR
     UC_ViewStudentHistory([View Student Attendance History])
     UC_EditAttendance([Edit Attendance Record])
 
+    %% Admin helpers: departments, batches, classes
     UC_ManageTeacher([Manage Teachers])
     UC_ManageDept([Manage Departments])
     UC_ManageBatch([Manage Batches])
     UC_ManageClass([Manage Class Groups])
 
+    %% Internal behaviors / constraints
     UC_NoDup([Prevent Duplicate Daily Attendance])
     UC_SaveImg([Store Attendance Snapshot])
+
+    %% Note: QR scanning is deprecated in repo (see backend/smart_attendance/smart_attendance/scan_qr.py)
   end
 
   subgraph RIGHT[ ]
@@ -46,14 +58,12 @@ flowchart LR
     Admin[Admin]
   end
 
-  %% Student and Teacher interactions
+  %% Primary interactions (actors -> use cases)
   Student --> UC_Mark
   Student --> UC_Manual
   Student --> UC_Recent
-
   Teacher --> UC_Mark
 
-  %% Admin interactions
   Admin --> UC_Login
   Admin --> UC_ChangePin
   Admin --> UC_ViewDash
@@ -75,7 +85,7 @@ flowchart LR
   Admin --> UC_ManageClass
   Admin --> UC_Recent
 
-  %% Internal include-like relationships
+  %% Include / extend relationships (semantics)
   UC_Login --> UC_Validate
   UC_Mark --> UC_NoDup
   UC_Mark --> UC_SaveImg

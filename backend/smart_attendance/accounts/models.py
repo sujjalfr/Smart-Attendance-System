@@ -174,3 +174,36 @@ class Teacher(models.Model):
 
     def __str__(self):
         return f"{self.employee_id} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        # Save first so `image.path` becomes available
+        super().save(*args, **kwargs)
+
+        # Auto-generate face encoding if image exists but encoding is missing or default (zeros)
+        is_default_or_empty = False
+        if not self.face_encoding or self.face_encoding == b"":
+            is_default_or_empty = True
+        else:
+            try:
+                arr = np.frombuffer(self.face_encoding, dtype=np.float64)
+                if np.all(arr == 0):
+                    is_default_or_empty = True
+            except Exception:
+                is_default_or_empty = True
+
+        if self.image and is_default_or_empty:
+            try:
+                from attendance.utils.face_utils import get_face_encoding
+
+                print(f"Auto-generating teacher face encoding for {self.employee_id} from image...")
+
+                encoding = get_face_encoding(self.image.path)
+
+                if encoding:
+                    self.face_encoding = encoding
+                    super().save(update_fields=["face_encoding"])
+                    print(f"Successfully saved teacher encoding for {self.employee_id}")
+                else:
+                    print(f"Warning: No face found in teacher image for {self.employee_id}")
+            except Exception as e:
+                print(f"Error generating teacher face encoding in save(): {e}")

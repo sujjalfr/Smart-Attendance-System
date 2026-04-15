@@ -1,5 +1,7 @@
+
 flowchart LR
 	%% Level-0 (Context) DFD - Smart Attendance System
+	%% Updated: 2026-04-10 — cleaned labels and consistency
 
 	Admin[Admin]
 	Student[Student]
@@ -9,23 +11,24 @@ flowchart LR
 
 	SAS((Smart Attendance System))
 
+	%% Primary flows between external entities and the system
 	Admin -->|Admin PIN Login Request| SAS
 	SAS -->|Auth Token Access Response| Admin
 
-	Admin -->|Student Teacher Setup and Class Configuration Data| SAS
-	SAS -->|Dashboard Data Reports and Export Files| Admin
+	Admin -->|Student / Teacher Setup & Class Config| SAS
+	SAS -->|Dashboard Data, Reports & Exports| Admin
 
-	Student -->|Face Scan Input and Manual Roll Input| SAS
-	SAS -->|Attendance Result Status| Student
+	Student -->|Face Scan or Manual Roll Input| SAS
+	SAS -->|Attendance Result / Status| Student
 
-	Teacher -->|Face Scan Input and Employee ID Input| SAS
-	SAS -->|Attendance Result Status| Teacher
+	Teacher -->|Face Scan or Employee ID Input| SAS
+	SAS -->|Attendance Result / Status| Teacher
 
 	Camera -->|Live Face Image Stream| SAS
-	SAS -->|Scan Trigger and Capture Feedback| Camera
+	SAS -->|Scan Trigger & Capture Feedback| Camera
 
-	SAS -->|Notification Details for Absence and Attendance| Notify
-	Notify -->|Delivery Status and Failure Info| SAS
+	SAS -->|Absence/Attendance Notification Payload| Notify
+	Notify -->|Delivery Status / Failure Info| SAS
 
 	classDef external fill:#ffffff,stroke:#333,stroke-width:1px,color:#111;
 	classDef process fill:#e6f0ff,stroke:#1d4ed8,stroke-width:1.5px,color:#111;

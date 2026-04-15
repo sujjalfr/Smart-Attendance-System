@@ -96,12 +96,14 @@ erDiagram
 		int id PK "AutoField"
 		varchar pin_hash "max=255, NULLABLE (store hashed PIN)"
 		datetime updated_at "auto_now"
+		note singleton_hint "application keeps first row as active config"
 	}
 
 	ADMIN_TOKEN {
 		int id PK "AutoField"
 		varchar key "max=64, UNIQUE, NOT NULL"
 		datetime created_at "default=timezone.now"
+		note expires_in "app logic: 168h via is_expired()"
 	}
 
 	%% -------------------------
@@ -119,6 +121,7 @@ erDiagram
 
 	STUDENT ||--o{ ATTENDANCE : "has daily records"
 	TEACHER ||--o{ TEACHER_ATTENDANCE : "has daily records"
+	ADMIN_SETTING ||--o{ ADMIN_TOKEN : "issues sessions (application-level, no FK)"
 
 	%% -------------------------
 	%% IMPLEMENTATION NOTES
@@ -130,6 +133,8 @@ erDiagram
 	%% - QR codes are generated from `Student.roll_no` and saved to `qr_codes/`.
 	%% - `AdminSetting` behaves like a singleton config (application logic enforces single active config).
 	%% - `AdminToken` expiry is enforced in application code via `is_expired()` (not a DB constraint).
+	%% - Admin auth flow: `/api/admin/auth/` validates PIN hash from ADMIN_SETTING then creates ADMIN_TOKEN.
+	%% - Admin PIN update flow: `/api/admin/pin/` updates ADMIN_SETTING.pin_hash (hashed via Django hashers).
 	%% - `absent_email_sent` tracks whether an absent notification email was already sent for that record.
 
 

@@ -8,11 +8,7 @@ Quick links
 - Backend quickstart: backend/readme.md
 
 Highlights
-- Student registration: photo upload → face encoding + QR gene
-Image:
-
-Image:
-ration
+- Student registration: photo upload → face encoding + QR generation
 - QR-based check-in with live face verification
 - Attendance stored with timestamp; admin export to CSV/Excel
 - Supports server-side (dlib) or client-side (face-api.js) recognition
