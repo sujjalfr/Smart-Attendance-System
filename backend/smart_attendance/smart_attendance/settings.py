@@ -162,5 +162,5 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 # Set these in environment or replace with your values (recommended: environment vars)
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'sujjalboi09@gmail.com')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'cmcd gwdh qlvt oydy')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
